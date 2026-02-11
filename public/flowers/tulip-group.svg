@@ -1,0 +1,15 @@
+<svg width="80" height="40" viewBox="0 0 80 40" xmlns="http://www.w3.org/2000/svg">
+  <g opacity="0.6">
+    <!-- Pink Tulip -->
+    <ellipse cx="15" cy="25" rx="8" ry="12" fill="#E8B4C4"/>
+    <rect x="14" y="25" width="2" height="12" fill="#A8B89C"/>
+    
+    <!-- Yellow Tulip -->
+    <ellipse cx="30" cy="22" rx="8" ry="12" fill="#F0E4A8"/>
+    <rect x="29" y="22" width="2" height="15" fill="#A8B89C"/>
+    
+    <!-- Blue Tulip -->
+    <ellipse cx="45" cy="28" rx="8" ry="12" fill="#B4D4E8"/>
+    <rect x="44" y="28" width="2" height="10" fill="#A8B89C"/>
+  </g>
+</svg>

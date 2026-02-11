@@ -1,0 +1,19 @@
+<svg width="60" height="60" viewBox="0 0 60 60" xmlns="http://www.w3.org/2000/svg">
+  <g opacity="0.6">
+    <!-- Stems -->
+    <rect x="12" y="22" width="2" height="28" fill="#A8B89C"/>
+    <rect x="22" y="18" width="2" height="32" fill="#A8B89C"/>
+
+    <!-- Tulip 1 -->
+    <path d="M8 22 Q13 10 18 22 Q13 24 8 22Z" fill="#E8A0B0"/>
+    <path d="M10 21 Q13 13 16 21 Q13 22 10 21Z" fill="#F0B0C0"/>
+
+    <!-- Tulip 2 -->
+    <path d="M18 18 Q23 6 28 18 Q23 20 18 18Z" fill="#D4899C"/>
+    <path d="M20 17 Q23 9 26 17 Q23 18 20 17Z" fill="#E0A0B0"/>
+
+    <!-- Leaves -->
+    <ellipse cx="8" cy="38" rx="5" ry="2" fill="#A8B89C" transform="rotate(-40 8 38)"/>
+    <ellipse cx="28" cy="34" rx="5" ry="2" fill="#A8B89C" transform="rotate(30 28 34)"/>
+  </g>
+</svg>
