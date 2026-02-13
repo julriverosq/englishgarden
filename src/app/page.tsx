@@ -15,8 +15,6 @@ export default function Dashboard() {
     const state = storage.get();
     setUserState(state);
 
-    // Check streak
-    storage.updateStreak();
   }, []);
 
   if (!userState) return <div className="p-8 text-center font-display">Loading floral garden...</div>;
@@ -54,8 +52,8 @@ export default function Dashboard() {
         />
         <StatCard
           icon={<BookOpen size={24} />}
-          label="Chapters Read"
-          value={Object.keys(userState.chaptersCompleted).length}
+          label="Sessions Read"
+          value={Object.keys(userState.sessionsCompleted).length}
           color="var(--color-tulip-blue)"
         />
         <StatCard
@@ -74,15 +72,18 @@ export default function Dashboard() {
               <div className="flex flex-col h-full justify-between">
                 <div>
                   <h2 className="font-display text-xl text-[var(--color-brown-soft)] mb-2">{userState.currentBook.title || 'Unknown Title'}</h2>
-                  <p className="font-body text-sm mb-4">Chapter {userState.currentBook.current_chapter}</p>
+                  <p className="font-body text-sm mb-4">Session {userState.currentBook.current_session}</p>
 
                   <div className="w-full bg-[var(--color-bg-secondary)] rounded-full h-4 border-2 border-[var(--color-pink-medium)] overflow-hidden mb-6">
-                    <div className="bg-[var(--color-pink-accent)] h-full w-[45%]" />
+                    <div
+                      className="bg-[var(--color-pink-accent)] h-full transition-all duration-500"
+                      style={{ width: `${Math.min(100, Math.round((userState.currentBook.current_session / (userState.currentBook.total_sessions || 1)) * 100))}%` }}
+                    />
                   </div>
                 </div>
 
                 <div className="flex gap-4">
-                  <Link href={`/reader/${userState.currentBook.book_id}/${userState.currentBook.current_chapter}`} className="flex-1">
+                  <Link href={`/reader/${userState.currentBook.book_id}/${userState.currentBook.current_session}`} className="flex-1">
                     <button className="w-full button-retro bg-[var(--color-pink-soft)] border-[3px] border-[var(--color-pink-medium)] rounded-xl py-4 font-display text-[12px] uppercase hover:bg-[var(--color-pink-medium)] text-[var(--color-brown-soft)] shadow-[2px_2px_0px_var(--color-pink-medium)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all">
                       Continue Reading
                     </button>

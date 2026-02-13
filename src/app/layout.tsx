@@ -29,6 +29,7 @@ export default function RootLayout({
     <html lang="en">
       <body
         className={`${dmSans.variable} ${pressStart2P.variable} antialiased`}
+        suppressHydrationWarning
       >
         {children}
         <ChatWidget />

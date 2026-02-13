@@ -25,10 +25,10 @@ export async function POST(req: NextRequest) {
 
         const buffer = await file.arrayBuffer();
 
-        // 1. Upload PDF to Supabase Storage
-        const fileName = `${Date.now()}-${file.name}`;
+        // 1. Upload PDF to Supabase Storage (Temporary or Permanent, we use 'books' bucket)
+        const fileName = `${Date.now()}-${file.name.replace(/[^a-zA-Z0-9.-]/g, '_')}`;
         const { data: uploadData, error: uploadError } = await supabase.storage
-            .from('books') // Ensure this bucket exists
+            .from('books')
             .upload(fileName, buffer, {
                 contentType: 'application/pdf',
                 upsert: false
@@ -39,61 +39,27 @@ export async function POST(req: NextRequest) {
             return NextResponse.json({ error: 'Failed to upload to storage' }, { status: 500 });
         }
 
-        const pdfUrl = `${supabaseUrl}/storage/v1/object/public/books/${fileName}`;
+        // 2. Analyze PDF to get word count
+        // We use the existing extractor to get text and count words
+        const sections = await extractTextFromPDF(buffer);
+        const fullText = sections.map(s => s.text).join('\n\n');
+        const totalWords = fullText.split(/\s+/).length;
 
-        // 2. Extract Text
-        // Note: This might timeout for large PDFs on Vercel (10s limit). 
-        // Ideally this should be a background job. For MVP, we process synchronously or handle small files.
-        let chaptersData;
-        try {
-            chaptersData = await extractTextFromPDF(buffer);
-        } catch (e) {
-            console.error('PDF Processing Error:', e);
-            return NextResponse.json({ error: 'Failed to process PDF text' }, { status: 500 });
-        }
-
-        // 3. Save Book to DB
-        const { data: book, error: bookError } = await supabase
-            .from('books')
-            .insert({
-                title: title || file.name.replace('.pdf', ''),
-                author: author || 'Unknown',
-                pdf_url: pdfUrl,
-                total_chapters: chaptersData.length
-            })
-            .select()
-            .single();
-
-        if (bookError || !book) {
-            console.error('Database Error:', bookError);
-            return NextResponse.json({ error: 'Failed to save book record' }, { status: 500 });
-        }
-
-        // 4. Save Chapters to DB
-        const chaptersToInsert = chaptersData.map((chapter, index) => ({
-            book_id: book.id,
-            chapter_number: index + 1,
-            title: `Chapter ${index + 1}`,
-            content_text: chapter.text,
-            word_count: chapter.text.split(/\s+/).length,
-            // phonetic content will be generated lazily or in another step to save time
-            content_phonetic: []
-        }));
-
-        const { error: chaptersError } = await supabase
-            .from('chapters')
-            .insert(chaptersToInsert);
-
-        if (chaptersError) {
-            console.error('Chapters Error:', chaptersError);
-            // We don't rollback book for now, but in prod we should.
-            return NextResponse.json({ error: 'Failed to save chapters' }, { status: 500 });
-        }
-
+        // Return metadata for configuration step
+        // We include title/author to pass them back later or store in FE state
         return NextResponse.json({
             success: true,
-            bookId: book.id,
-            message: 'Book processed successfully'
+            tempPdfUrl: uploadData.path, // Path to file in storage
+            totalWords,
+            bookInfo: {
+                title: title || file.name.replace('.pdf', ''),
+                author: author || 'Unknown'
+            },
+            suggestedConfig: {
+                wordsPerSession: 250,
+                sessionsPerDay: 1,
+                estimatedDays: Math.ceil(totalWords / 250)
+            }
         });
 
     } catch (error) {

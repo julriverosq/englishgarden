@@ -7,7 +7,15 @@ export const storage = {
         if (typeof window === 'undefined') return INITIAL_STATE;
         try {
             const data = localStorage.getItem(STORAGE_KEY);
-            return data ? JSON.parse(data) : INITIAL_STATE;
+            if (!data) return INITIAL_STATE;
+            const parsed = JSON.parse(data);
+            // Merge with INITIAL_STATE to fill missing fields from schema changes
+            return {
+                ...INITIAL_STATE,
+                ...parsed,
+                stats: { ...INITIAL_STATE.stats, ...parsed.stats },
+                preferences: { ...INITIAL_STATE.preferences, ...parsed.preferences },
+            };
         } catch (error) {
             console.error('Error reading from localStorage', error);
             return INITIAL_STATE;

@@ -22,8 +22,12 @@ export async function extractTextFromPDF(buffer: ArrayBuffer): Promise<{ text: s
             const page = await doc.getPage(i);
             const textContent = await page.getTextContent();
             const pageText = textContent.items
-                .map((item: any) => item.str)
-                .join(' ');
+                .map((item: any) => {
+                    let text = item.str;
+                    if (item.hasEOL) text += '\n';
+                    return text;
+                })
+                .join('');
 
             // Clean up: add page break
             fullText += pageText + '\n\n';

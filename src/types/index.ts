@@ -6,27 +6,22 @@ export interface UserPreferences {
     show_phonetic_transcription: boolean;
 }
 
-export interface CurrentBook {
+export interface ReadingSession {
+    id: string;
     book_id: string;
-    title?: string;
-    current_chapter: number;
-    last_read_date: string;
-    started_at: string;
+    session_number: number;
+    content_text: string;
+    content_phonetic: { line: string; phonetic: string }[] | null;
+    word_count: number;
+    estimated_reading_time: number;
+    difficulty_score: number;
+    source_pages: string;
 }
 
-export interface UserStats {
-    total_points: number;
-    streak_days: number;
-    longest_streak: number;
-    total_reading_minutes: number;
-    avg_pronunciation_score: number;
-    last_study_date?: string;
-}
-
-export interface ChapterProgress {
+export interface SessionProgress {
     completed_at: string;
     pronunciation_score: number;
-    reading_time_minutes: number;
+    reading_time_seconds: number;
     audio_url?: string;
 }
 
@@ -66,11 +61,33 @@ export interface StudySession {
     points_earned: number;
 }
 
+export interface CurrentBook {
+    book_id: string;
+    title?: string;
+    current_session: number;
+    total_sessions: number;
+    last_read_date: string;
+    started_at: string;
+    // Config
+    words_per_session: number;
+    sessions_per_day: number;
+}
+
+export interface UserStats {
+    total_points: number;
+    streak_days: number;
+    longest_streak: number;
+    total_reading_minutes: number;
+    avg_pronunciation_score: number;
+    last_study_date?: string;
+    total_sessions_completed: number;
+}
+
 export interface UserState {
     preferences: UserPreferences;
     currentBook: CurrentBook | null;
     stats: UserStats;
-    chaptersCompleted: Record<string, ChapterProgress>; // key: chapter_id
+    sessionsCompleted: Record<string, SessionProgress>; // key: session_id
     vocabulary: Record<string, VocabularyWord>; // key: word (lowercase)
     exercisesCompleted: Record<string, ExerciseResult>; // key: exercise_id
     conversations: Conversation[];
@@ -92,8 +109,9 @@ export const INITIAL_STATE: UserState = {
         longest_streak: 0,
         total_reading_minutes: 0,
         avg_pronunciation_score: 0,
+        total_sessions_completed: 0,
     },
-    chaptersCompleted: {},
+    sessionsCompleted: {},
     vocabulary: {},
     exercisesCompleted: {},
     conversations: [],

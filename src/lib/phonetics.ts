@@ -6,7 +6,9 @@ interface PhoneticLine {
 }
 
 export async function generatePhonetics(text: string): Promise<PhoneticLine[]> {
-    const lines = text.split('\n').map(l => l.trim()).filter(l => l.length > 0);
+    const lines = (text.match(/[^.!?]+[.!?]+/g) || [text])
+        .map(l => l.trim())
+        .filter(l => l.length > 0);
 
     const prompt = `
     You are a phonetic transcription assistant. 
