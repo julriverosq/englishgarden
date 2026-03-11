@@ -1,3 +1,11 @@
+export type WordPhonetics = Record<string, string>;
+
+export interface WordPronunciationResult {
+    word: string;
+    accuracyScore: number;
+    errorType: 'None' | 'Mispronunciation' | 'Omission' | 'Insertion';
+}
+
 export interface UserPreferences {
     name: string;
     native_language: string;

@@ -5,8 +5,9 @@ import { supabase } from '@/lib/supabase';
 import { WindowRetro } from '../ui/WindowRetro';
 import { PronunciationRecorder } from './PronunciationRecorder';
 import { storage } from '@/lib/storage';
-import { Eye, EyeOff, ChevronRight, ChevronLeft, Loader2, ArrowLeft } from 'lucide-react';
-import { UserState, ReadingSession, VocabularyWord } from '@/types';
+import { Eye, EyeOff, ChevronRight, ChevronLeft, ArrowLeft } from 'lucide-react';
+import { UserState, ReadingSession, VocabularyWord, WordPronunciationResult } from '@/types';
+import { getWordPhonetics, WordPhonetics } from '@/lib/word-phonetics';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 
@@ -20,10 +21,11 @@ export default function ChapterView({ bookId, chapterId }: ChapterViewProps) {
     const [session, setSession] = useState<ReadingSession | null>(null);
     const [book, setBook] = useState<any>(null);
     const [loading, setLoading] = useState(true);
-    const [phoneticsLoading, setPhoneticsLoading] = useState(false);
     const [showPhonetic, setShowPhonetic] = useState(true);
     const [userState, setUserState] = useState<UserState | null>(null);
     const [highlightedWords, setHighlightedWords] = useState<Set<string>>(new Set());
+    const [wordPhonetics, setWordPhonetics] = useState<WordPhonetics>({});
+    const [pronunciationResults, setPronunciationResults] = useState<Record<string, WordPronunciationResult>>({});
 
     useEffect(() => {
         const loadData = async () => {
@@ -49,9 +51,10 @@ export default function ChapterView({ bookId, chapterId }: ChapterViewProps) {
             setSession(sessionData);
             setLoading(false);
 
-            // Lazy Load Phonetics if missing
-            if (sessionData && (!sessionData.content_phonetic || sessionData.content_phonetic.length === 0)) {
-                loadPhonetics(sessionData.id);
+            // Generate word-level phonetics locally (instant, no API)
+            if (sessionData) {
+                const allWords = sessionData.content_text.split(/\s+/);
+                setWordPhonetics(getWordPhonetics(allWords));
             }
 
             // Update Current Book in Storage
@@ -74,26 +77,6 @@ export default function ChapterView({ bookId, chapterId }: ChapterViewProps) {
         loadData();
     }, [bookId, chapterId]);
 
-    const loadPhonetics = async (sessionId: string) => {
-        setPhoneticsLoading(true);
-        try {
-            const response = await fetch('/api/sessions/phonetics', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ sessionId })
-            });
-            const data = await response.json();
-
-            if (data.phonetics) {
-                setSession(prev => prev ? { ...prev, content_phonetic: data.phonetics } : null);
-            }
-        } catch (error) {
-            console.error('Failed to load phonetics', error);
-        } finally {
-            setPhoneticsLoading(false);
-        }
-    };
-
     const handleNextSession = () => {
         const nextSessionNum = parseInt(chapterId) + 1;
         router.push(`/reader/${bookId}/${nextSessionNum}`);
@@ -109,12 +92,10 @@ export default function ChapterView({ bookId, chapterId }: ChapterViewProps) {
     if (loading) return <div className="p-8 text-center">Loading session...</div>;
     if (!session) return <div className="p-8 text-center">Session not found.</div>;
 
-    // Process content
-    const lines = session.content_phonetic && Array.isArray(session.content_phonetic) && session.content_phonetic.length > 0
-        ? session.content_phonetic
-        : (session.content_text.match(/[^.!?]+[.!?]+/g) || [session.content_text])
-            .filter((l: string) => l.trim().length > 0)
-            .map((l: string) => ({ line: l.trim(), phonetic: null }));
+    // Process content into lines for rendering
+    const lines = (session.content_text.match(/[^.!?]+[.!?]+/g) || [session.content_text])
+        .filter((l: string) => l.trim().length > 0)
+        .map((l: string) => ({ line: l.trim() }));
 
     const handleWordClick = (cleanWord: string) => {
         if (!cleanWord) return;
@@ -174,6 +155,14 @@ export default function ChapterView({ bookId, chapterId }: ChapterViewProps) {
         storage.updateStreak();
     };
 
+    const handleWordPronunciationResults = (results: WordPronunciationResult[]) => {
+        const map: Record<string, WordPronunciationResult> = {};
+        for (const r of results) {
+            map[r.word] = r;
+        }
+        setPronunciationResults(map);
+    };
+
     return (
         <div className="max-w-4xl mx-auto p-4 space-y-6">
             <Link href="/" className="inline-flex items-center gap-2 text-[var(--color-brown-soft)] hover:text-[var(--color-pink-accent)] font-display text-xs uppercase">
@@ -189,11 +178,6 @@ export default function ChapterView({ bookId, chapterId }: ChapterViewProps) {
                         >
                             {showPhonetic ? <Eye size={16} /> : <EyeOff size={16} />} Phonetics
                         </button>
-                        {phoneticsLoading && (
-                            <span className="text-xs text-[var(--color-brown-soft)] flex items-center gap-1 animate-pulse">
-                                <Loader2 size={12} className="animate-spin" /> Generating IPA...
-                            </span>
-                        )}
                     </div>
                     <div className="font-display text-xs text-[var(--color-brown-soft)]">
                         {session.word_count} words
@@ -204,37 +188,45 @@ export default function ChapterView({ bookId, chapterId }: ChapterViewProps) {
                 <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
                     {lines.map((item: any, idx: number) => (
                         <div key={idx} className="reading-line-group bg-[var(--color-cream)] border-l-4 border-[var(--color-lavender-light)] rounded pl-4 py-2 hover:bg-[var(--color-bg-secondary)] transition-colors group">
-                            <p className="reading-text font-body text-lg text-[var(--color-brown-soft)] leading-relaxed mb-1">
+                            <p className={`reading-text font-body text-[var(--color-brown-soft)] leading-relaxed mb-1 flex flex-wrap ${showPhonetic ? 'items-end gap-y-3' : 'items-baseline gap-y-1'}`}>
                                 {item.line.split(' ').map((word: string, wIdx: number) => {
-                                    // Basic word cleaning
                                     const cleanWord = word.replace(/[^a-zA-Z]/g, '').toLowerCase();
+                                    const phonetic = wordPhonetics[cleanWord];
                                     const isMastered = userState?.vocabulary[cleanWord]?.is_mastered;
                                     const isNew = !userState?.vocabulary[cleanWord];
-
                                     const isHighlighted = highlightedWords.has(cleanWord);
+                                    const pronResult = pronunciationResults[cleanWord];
+                                    const isFailed = pronResult && pronResult.accuracyScore < 60;
+                                    const isGood = pronResult && pronResult.accuracyScore >= 80;
 
                                     return (
                                         <span
                                             key={wIdx}
                                             onClick={() => handleWordClick(cleanWord)}
                                             className={`
-                                   inline-block mr-1 cursor-pointer rounded px-0.5 transition-colors
-                                   ${isHighlighted ? 'bg-[var(--color-tulip-yellow)]' : ''}
-                                   ${!isHighlighted && isNew ? 'hover:bg-[var(--color-tulip-yellow)] decoration-[var(--color-tulip-yellow)] decoration-2 underline-offset-2' : ''}
-                                   ${isMastered ? 'text-[var(--color-green-medium)]' : ''}
-                                 `}
-                                            title={isHighlighted ? "Highlighted" : isNew ? "New word" : "Mastered"}
+                                                inline-flex flex-col items-center mr-1 cursor-pointer rounded px-0.5 transition-colors
+                                                ${isFailed ? 'bg-red-100 underline decoration-red-400 decoration-wavy decoration-2 underline-offset-4' : ''}
+                                                ${isGood && !isHighlighted ? 'bg-green-50' : ''}
+                                                ${isHighlighted && !isFailed ? 'bg-[var(--color-tulip-yellow)]' : ''}
+                                                ${!isHighlighted && !pronResult && isNew ? 'hover:bg-[var(--color-tulip-yellow)]' : ''}
+                                                ${isMastered && !pronResult ? 'text-[var(--color-green-medium)]' : ''}
+                                            `}
+                                            title={
+                                                pronResult
+                                                    ? `${pronResult.accuracyScore.toFixed(0)}% accuracy${pronResult.errorType !== 'None' ? ` - ${pronResult.errorType}` : ''}`
+                                                    : isHighlighted ? "Highlighted" : isNew ? "New word" : "Mastered"
+                                            }
                                         >
-                                            {word}
+                                            <span className="text-lg leading-relaxed">{word}</span>
+                                            {showPhonetic && (
+                                                <span className={`font-mono text-[10px] leading-tight ${isFailed ? 'text-red-500 font-bold' : 'text-[var(--color-lavender-medium)]'}`}>
+                                                    {phonetic || '\u00A0'}
+                                                </span>
+                                            )}
                                         </span>
                                     );
                                 })}
                             </p>
-                            {showPhonetic && item.phonetic && (
-                                <p className="phonetic-text font-mono text-sm text-[var(--color-lavender-medium)]">
-                                    {item.phonetic}
-                                </p>
-                            )}
                         </div>
                     ))}
                 </div>
@@ -242,8 +234,10 @@ export default function ChapterView({ bookId, chapterId }: ChapterViewProps) {
                 {/* Footer / Actions */}
                 <div className="mt-8 pt-6 border-t border-[var(--color-pink-medium)] flex flex-col gap-6">
                     <PronunciationRecorder
-                        referenceText={session.content_text.substring(0, 500)} // Analyze first chunk for now
+                        referenceText={session.content_text.substring(0, 500)}
+                        wordPhonetics={wordPhonetics}
                         onResult={handlePronunciationResult}
+                        onWordResults={handleWordPronunciationResults}
                     />
 
                     <div className="flex justify-between">

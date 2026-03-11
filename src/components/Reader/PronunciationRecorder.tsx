@@ -4,18 +4,26 @@ import React, { useState, useEffect } from 'react';
 import { Mic, Square, Loader2 } from 'lucide-react';
 import * as SpeechSDK from 'microsoft-cognitiveservices-speech-sdk';
 import { ProgressBarFloral } from '../ui/ProgressBarFloral';
-import { MessageBoxRetro } from '../ui/MessageBoxRetro';
+import { WordPronunciationResult } from '@/types';
 
 interface PronunciationRecorderProps {
     referenceText: string;
+    wordPhonetics: Record<string, string>;
     onResult: (score: number) => void;
+    onWordResults: (results: WordPronunciationResult[]) => void;
 }
 
-export const PronunciationRecorder: React.FC<PronunciationRecorderProps> = ({ referenceText, onResult }) => {
+export const PronunciationRecorder: React.FC<PronunciationRecorderProps> = ({
+    referenceText,
+    wordPhonetics,
+    onResult,
+    onWordResults,
+}) => {
     const [isRecording, setIsRecording] = useState(false);
     const [processing, setProcessing] = useState(false);
     const [score, setScore] = useState<number | null>(null);
     const [feedback, setFeedback] = useState<string | null>(null);
+    const [wordResults, setWordResults] = useState<WordPronunciationResult[]>([]);
     const [recognizer, setRecognizer] = useState<SpeechSDK.SpeechRecognizer | null>(null);
 
     useEffect(() => {
@@ -41,7 +49,6 @@ export const PronunciationRecorder: React.FC<PronunciationRecorderProps> = ({ re
 
             const audioConfig = SpeechSDK.AudioConfig.fromDefaultMicrophoneInput();
 
-            // Configure Pronunciation Assessment
             const pronunciationAssessmentConfig = new SpeechSDK.PronunciationAssessmentConfig(
                 referenceText,
                 SpeechSDK.PronunciationAssessmentGradingSystem.HundredMark,
@@ -55,18 +62,34 @@ export const PronunciationRecorder: React.FC<PronunciationRecorderProps> = ({ re
             newRecognizer.recognized = (s, e) => {
                 if (e.result.reason === SpeechSDK.ResultReason.RecognizedSpeech) {
                     const pronunciationResult = SpeechSDK.PronunciationAssessmentResult.fromResult(e.result);
-                    // console.log("Accuracy score:", pronunciationResult.accuracyScore);
-                    // console.log("Pronunciation score:", pronunciationResult.pronunciationScore);
-                    // console.log("Completeness score:", pronunciationResult.completenessScore);
-                    // console.log("Fluency score:", pronunciationResult.fluencyScore);
-
                     const finalScore = pronunciationResult.pronunciationScore;
                     setScore(finalScore);
                     onResult(finalScore);
 
-                    if (finalScore >= 90) setFeedback("Excellent pronunciation! 🌟");
-                    else if (finalScore >= 75) setFeedback("Good job! Keep practicing. 👍");
-                    else setFeedback("Try again, focus on clarity. 👂");
+                    if (finalScore >= 90) setFeedback("Excellent pronunciation!");
+                    else if (finalScore >= 75) setFeedback("Good job! Keep practicing.");
+                    else setFeedback("Try again, focus on the highlighted words.");
+
+                    // Extract word-level results from the detailed JSON
+                    try {
+                        const jsonStr = e.result.properties.getProperty(
+                            SpeechSDK.PropertyId.SpeechServiceResponse_JsonResult
+                        );
+                        const parsed = JSON.parse(jsonStr);
+                        const words = parsed?.NBest?.[0]?.Words;
+
+                        if (Array.isArray(words)) {
+                            const results: WordPronunciationResult[] = words.map((w: any) => ({
+                                word: w.Word.toLowerCase(),
+                                accuracyScore: w.PronunciationAssessment?.AccuracyScore ?? 0,
+                                errorType: w.PronunciationAssessment?.ErrorType ?? 'None',
+                            }));
+                            setWordResults(results);
+                            onWordResults(results);
+                        }
+                    } catch (parseErr) {
+                        console.error('Failed to parse word-level results:', parseErr);
+                    }
                 } else if (e.result.reason === SpeechSDK.ResultReason.NoMatch) {
                     setFeedback("Could not hear you clearly.");
                 }
@@ -82,7 +105,7 @@ export const PronunciationRecorder: React.FC<PronunciationRecorderProps> = ({ re
                 setProcessing(false);
             };
 
-            newRecognizer.sessionStopped = (s, e) => {
+            newRecognizer.sessionStopped = () => {
                 setIsRecording(false);
                 setProcessing(false);
                 newRecognizer.stopContinuousRecognitionAsync();
@@ -90,12 +113,12 @@ export const PronunciationRecorder: React.FC<PronunciationRecorderProps> = ({ re
 
             setRecognizer(newRecognizer);
 
-            // Start
             newRecognizer.startContinuousRecognitionAsync(() => {
                 setIsRecording(true);
                 setProcessing(false);
                 setFeedback(null);
                 setScore(null);
+                setWordResults([]);
             });
 
         } catch (error) {
@@ -109,8 +132,22 @@ export const PronunciationRecorder: React.FC<PronunciationRecorderProps> = ({ re
             setProcessing(true);
             recognizer.stopContinuousRecognitionAsync(() => {
                 setIsRecording(false);
-                // Processing usually happens in 'recognized' event which fires shortly after
             });
+        }
+    };
+
+    const getScoreColor = (accuracy: number) => {
+        if (accuracy >= 80) return 'text-green-600 bg-green-50 border-green-200';
+        if (accuracy >= 50) return 'text-yellow-700 bg-yellow-50 border-yellow-200';
+        return 'text-red-600 bg-red-50 border-red-200';
+    };
+
+    const getErrorLabel = (errorType: string) => {
+        switch (errorType) {
+            case 'Mispronunciation': return 'Mispronounced';
+            case 'Omission': return 'Skipped';
+            case 'Insertion': return 'Extra word';
+            default: return null;
         }
     };
 
@@ -154,6 +191,37 @@ export const PronunciationRecorder: React.FC<PronunciationRecorderProps> = ({ re
             {feedback && (
                 <div className={`text-sm font-bold ${score && score > 75 ? 'text-green-600' : 'text-[var(--color-pink-accent)]'}`}>
                     {feedback}
+                </div>
+            )}
+
+            {/* Word-by-word breakdown */}
+            {wordResults.length > 0 && (
+                <div className="w-full mt-2">
+                    <p className="font-display text-[10px] uppercase text-[var(--color-brown-soft)] mb-2">
+                        Word-by-word breakdown
+                    </p>
+                    <div className="flex flex-wrap gap-1.5">
+                        {wordResults.map((wr, idx) => {
+                            const errorLabel = getErrorLabel(wr.errorType);
+                            const phonetic = wordPhonetics[wr.word];
+
+                            return (
+                                <div
+                                    key={idx}
+                                    className={`inline-flex flex-col items-center px-2 py-1 rounded border text-xs ${getScoreColor(wr.accuracyScore)}`}
+                                >
+                                    <span className="font-bold">{wr.word}</span>
+                                    {phonetic && (
+                                        <span className="font-mono text-[9px] opacity-70">{phonetic}</span>
+                                    )}
+                                    <span className="text-[9px]">{wr.accuracyScore.toFixed(0)}%</span>
+                                    {errorLabel && (
+                                        <span className="text-[8px] font-display uppercase opacity-80">{errorLabel}</span>
+                                    )}
+                                </div>
+                            );
+                        })}
+                    </div>
                 </div>
             )}
         </div>
