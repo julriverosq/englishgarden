@@ -9,6 +9,7 @@ import { UserState } from '@/types';
 import { PlantSproutIcon } from '@/components/ui/PlantSproutIcon';
 import { SakuraIcon } from '@/components/ui/SakuraIcon';
 import { BookBasketIcon } from '@/components/ui/BookBasketIcon';
+import { SeedReminder } from '@/components/ui/SeedReminder';
 
 export default function Dashboard() {
   const [userState, setUserState] = useState<UserState | null>(null);
@@ -24,6 +25,8 @@ export default function Dashboard() {
 
   return (
     <div className="min-h-screen p-4 md:p-8 max-w-6xl mx-auto space-y-8">
+      {/* Seed Collection Reminder */}
+      <SeedReminder seedCount={Object.keys(userState.seedCollection || {}).length} />
       {/* Header */}
       <header className="flex justify-between items-center mb-12">
         <div>

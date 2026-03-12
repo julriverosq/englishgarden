@@ -66,6 +66,11 @@ export default function PracticeWordPage() {
                 delete newSeeds[wordParam];
                 return { ...state, seedCollection: newSeeds };
             });
+
+            // Track daily bloomed count for reminder suppression
+            const bloomKey = `seeds_bloomed_${new Date().toISOString().split('T')[0]}`;
+            const current = parseInt(localStorage.getItem(bloomKey) || '0');
+            localStorage.setItem(bloomKey, String(current + 1));
         }
     };
 

@@ -29,6 +29,7 @@ export default function ChapterView({ bookId, chapterId }: ChapterViewProps) {
     const [pronunciationResultsByWord, setPronunciationResultsByWord] = useState<Record<string, { avgScore: number; errorType: string }>>({});
     const [allPronunciationResults, setAllPronunciationResults] = useState<WordPronunciationResult[]>([]);
     const [showBreakdownModal, setShowBreakdownModal] = useState(false);
+    const [breakdownFilter, setBreakdownFilter] = useState<'all' | 'red' | 'orange' | 'green'>('all');
 
     useEffect(() => {
         const loadData = async () => {
@@ -215,174 +216,237 @@ export default function ChapterView({ bookId, chapterId }: ChapterViewProps) {
         setAllPronunciationResults(alignedResults);
     };
 
+    // Compute aggregated breakdown data
+    const aggregatedBreakdown = (() => {
+        const uniqueMap = allPronunciationResults.reduce((acc: any, wr) => {
+            if (!acc[wr.word]) acc[wr.word] = { word: wr.word, scores: [], errorTypes: new Set() };
+            acc[wr.word].scores.push(wr.accuracyScore);
+            if (wr.errorType !== 'None') acc[wr.word].errorTypes.add(wr.errorType);
+            return acc;
+        }, {});
+
+        return Object.values(uniqueMap).map((a: any) => {
+            const errorTypesArr = Array.from(a.errorTypes);
+            const isOmission = errorTypesArr.length === 1 && errorTypesArr[0] === 'Omission';
+            return {
+                word: a.word,
+                avgScore: a.scores.reduce((sum: number, val: number) => sum + val, 0) / a.scores.length,
+                lowestScore: Math.min(...a.scores),
+                isOmission,
+                errorLabel: errorTypesArr.length > 0 ? errorTypesArr.join(', ') : null
+            };
+        }).sort((a: any, b: any) => a.avgScore - b.avgScore);
+    })();
+
+    const filteredBreakdown = aggregatedBreakdown.filter((wr: any) => {
+        if (breakdownFilter === 'all') return true;
+        if (breakdownFilter === 'red') return wr.avgScore < 60 && !wr.isOmission;
+        if (breakdownFilter === 'orange') return wr.avgScore >= 60 && wr.avgScore < 80 && !wr.isOmission;
+        if (breakdownFilter === 'green') return wr.avgScore >= 80 && !wr.isOmission;
+        return true;
+    });
+
+    const redCount = aggregatedBreakdown.filter((w: any) => w.avgScore < 60 && !w.isOmission).length;
+    const orangeCount = aggregatedBreakdown.filter((w: any) => w.avgScore >= 60 && w.avgScore < 80 && !w.isOmission).length;
+    const greenCount = aggregatedBreakdown.filter((w: any) => w.avgScore >= 80 && !w.isOmission).length;
+
     return (
-        <div className="max-w-4xl mx-auto p-4 h-[100dvh] flex flex-col space-y-4">
+        <div className="mx-auto p-4 h-[100dvh] flex flex-col space-y-4" style={{ maxWidth: showBreakdownModal ? '90rem' : '56rem' }}>
             <Link href="/" className="inline-flex items-center gap-2 text-[var(--color-brown-soft)] hover:text-[var(--color-pink-accent)] font-display text-xs uppercase shrink-0">
                 <ArrowLeft size={16} /> Back to Garden
             </Link>
-            <WindowRetro 
-                title={`${book?.title} - Session ${session.session_number}`} 
-                flowerType="daisy"
-                className="flex-1 min-h-0 flex flex-col"
-                contentClassName="flex-1 min-h-0 flex flex-col"
-            >
-                {/* Toolbar */}
-                <div className="flex justify-between items-center mb-6 border-b border-[var(--color-pink-medium)] pb-4 shrink-0">
-                    <div className="flex gap-2 items-center">
-                        <button
-                            onClick={() => setShowPhonetic(!showPhonetic)}
-                            className="flex items-center gap-2 text-xs font-display uppercase text-[var(--color-brown-soft)] hover:text-[var(--color-pink-accent)]"
-                        >
-                            {showPhonetic ? <Eye size={16} /> : <EyeOff size={16} />} Phonetics
-                        </button>
-                    </div>
-                    <div className="font-display text-xs text-[var(--color-brown-soft)]">
-                        {session.word_count} words
-                    </div>
-                </div>
 
-                {/* Content */}
-                <div className="space-y-6 flex-1 overflow-y-auto pr-2 custom-scrollbar">
-                    {lines.map((item: any, idx: number) => (
-                        <div key={idx} className="reading-line-group bg-[var(--color-cream)] border-l-4 border-[var(--color-lavender-light)] rounded pl-4 py-2 hover:bg-[var(--color-bg-secondary)] transition-colors group">
-                            <p className={`reading-text font-body text-[var(--color-brown-soft)] leading-relaxed mb-1 flex flex-wrap ${showPhonetic ? 'items-end gap-y-3' : 'items-baseline gap-y-1'}`}>
-                                {item.words.map(({ original, cleanWord }: any, wIdx: number) => {
-                                    const phonetic = wordPhonetics[cleanWord];
-                                    const isMastered = userState?.vocabulary[cleanWord]?.is_mastered;
-                                    const isNew = !userState?.vocabulary[cleanWord];
-                                    const isHighlighted = highlightedWords.has(cleanWord);
-                                    const pronResult = pronunciationResultsByWord[cleanWord];
-                                    const isFailed = pronResult && pronResult.avgScore < 60;
-                                    const isGood = pronResult && pronResult.avgScore >= 80;
-                                    const isOrange = pronResult && pronResult.avgScore >= 60 && pronResult.avgScore < 80;
-
-                                    let textColorClass = "text-[var(--color-brown-soft)]";
-                                    if (isFailed) textColorClass = "text-red-500 font-bold";
-                                    else if (isOrange) textColorClass = "text-orange-500 font-bold";
-                                    else if (isGood) textColorClass = "text-green-600 font-bold";
-                                    else if (isMastered) textColorClass = "text-[var(--color-green-medium)]";
-
-                                    return (
-                                        <span
-                                            key={wIdx}
-                                            onClick={() => handleWordClick(cleanWord)}
-                                            className={`
-                                                inline-flex flex-col items-center mr-1 cursor-pointer rounded px-0.5 transition-colors
-                                                ${isHighlighted && !pronResult ? 'bg-[var(--color-tulip-yellow)]' : ''}
-                                                ${!isHighlighted && !pronResult && isNew ? 'hover:bg-[var(--color-tulip-yellow)]' : ''}
-                                                ${textColorClass}
-                                            `}
-                                            title={
-                                                pronResult
-                                                    ? `${pronResult.avgScore.toFixed(0)}% accuracy${pronResult.errorType !== 'None' ? ` - ${pronResult.errorType}` : ''}`
-                                                    : isHighlighted ? "Highlighted" : isNew ? "New word" : "Mastered"
-                                            }
-                                        >
-                                            <span className="text-lg leading-relaxed">{original}</span>
-                                            {showPhonetic && (
-                                                <span className={`font-mono text-[10px] leading-tight ${isFailed ? 'text-red-500 font-bold' : 'text-[var(--color-lavender-medium)]'}`}>
-                                                    {phonetic || '\u00A0'}
-                                                </span>
-                                            )}
-                                        </span>
-                                    );
-                                })}
-                            </p>
-                        </div>
-                    ))}
-                </div>
-
-                {/* Footer / Actions */}
-                <div className="mt-4 pt-4 border-t border-[var(--color-pink-medium)] flex flex-col gap-4 shrink-0">
-                    <PronunciationRecorder
-                        referenceText={session.content_text}
-                        wordPhonetics={wordPhonetics}
-                        onResult={handlePronunciationResult}
-                        onWordResults={handleWordPronunciationResults}
-                        onOpenBreakdown={() => setShowBreakdownModal(true)}
-                    />
-
-                    <div className="flex justify-between">
-                        <button
-                            onClick={handlePrevSession}
-                            disabled={parseInt(chapterId) <= 1}
-                            className="button-retro bg-[var(--color-cream)] border-[3px] border-[var(--color-pink-medium)] flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-display text-[var(--color-brown-soft)] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[var(--color-pink-light)]"
-                        >
-                            <ChevronLeft size={16} /> Prev
-                        </button>
-                        <button
-                            onClick={handleNextSession}
-                            className="button-retro bg-[var(--color-pink-soft)] border-[3px] border-[var(--color-pink-medium)] flex items-center gap-2 px-6 py-3 rounded-lg text-xs font-display text-[var(--color-brown-soft)] hover:bg-[var(--color-pink-medium)] shadow-[2px_2px_0px_var(--color-pink-medium)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none"
-                        >
-                            Next Session <ChevronRight size={16} />
-                        </button>
-                    </div>
-                </div>
-            </WindowRetro>
-
-            {/* Breakdown Modal */}
-            {showBreakdownModal && (
-                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
-                    <div className="bg-[var(--color-cream)] border-[3px] border-[var(--color-pink-medium)] rounded-xl p-6 max-w-2xl w-full max-h-[80vh] flex flex-col shadow-[8px_8px_0px_var(--color-pink-medium)]">
-                        <div className="flex justify-between items-center mb-6 border-b border-[var(--color-pink-medium)] pb-4">
-                            <h2 className="font-display text-xl uppercase text-[var(--color-pink-accent)]">Word Breakdown</h2>
-                            <button onClick={() => setShowBreakdownModal(false)} className="text-[var(--color-brown-soft)] hover:text-[var(--color-pink-accent)] font-bold">
-                                Close X
+            {/* Main two-column layout */}
+            <div className="flex gap-4 flex-1 min-h-0">
+                {/* Reading Panel */}
+                <WindowRetro 
+                    title={`${book?.title} - Session ${session.session_number}`} 
+                    flowerType="daisy"
+                    className={`min-h-0 flex flex-col transition-all duration-300 ${showBreakdownModal ? 'w-[60%]' : 'w-full'}`}
+                    contentClassName="flex-1 min-h-0 flex flex-col"
+                >
+                    {/* Toolbar */}
+                    <div className="flex justify-between items-center mb-6 border-b border-[var(--color-pink-medium)] pb-4 shrink-0">
+                        <div className="flex gap-2 items-center">
+                            <button
+                                onClick={() => setShowPhonetic(!showPhonetic)}
+                                className="flex items-center gap-2 text-xs font-display uppercase text-[var(--color-brown-soft)] hover:text-[var(--color-pink-accent)]"
+                            >
+                                {showPhonetic ? <Eye size={16} /> : <EyeOff size={16} />} Phonetics
                             </button>
                         </div>
-                        <div className="overflow-y-auto pr-2 custom-scrollbar flex-1">
-                            <div className="flex flex-wrap gap-2">
-                                {(() => {
-                                    const uniqueMap = allPronunciationResults.reduce((acc: any, wr) => {
-                                        if (!acc[wr.word]) acc[wr.word] = { word: wr.word, scores: [], errorTypes: new Set() };
-                                        acc[wr.word].scores.push(wr.accuracyScore);
-                                        if (wr.errorType !== 'None') acc[wr.word].errorTypes.add(wr.errorType);
-                                        return acc;
-                                    }, {});
+                        <div className="font-display text-xs text-[var(--color-brown-soft)]">
+                            {session.word_count} words
+                        </div>
+                    </div>
 
-                                    const aggregated = Object.values(uniqueMap).map((a: any) => {
-                                        const errorTypesArr = Array.from(a.errorTypes);
-                                        // Highlight omissions heavily if present as only error
-                                        const isOmission = errorTypesArr.length === 1 && errorTypesArr[0] === 'Omission';
-                                        return {
-                                            word: a.word,
-                                            avgScore: a.scores.reduce((sum: number, val: number) => sum + val, 0) / a.scores.length,
-                                            lowestScore: Math.min(...a.scores),
-                                            isOmission,
-                                            errorLabel: errorTypesArr.length > 0 ? errorTypesArr.join(', ') : null
-                                        };
-                                    }).sort((a: any, b: any) => a.avgScore - b.avgScore);
+                    {/* Content */}
+                    <div className="space-y-6 flex-1 overflow-y-auto pr-2 custom-scrollbar">
+                        {lines.map((item: any, idx: number) => (
+                            <div key={idx} className="reading-line-group bg-[var(--color-cream)] border-l-4 border-[var(--color-lavender-light)] rounded pl-4 py-2 hover:bg-[var(--color-bg-secondary)] transition-colors group">
+                                <p className={`reading-text font-body text-[var(--color-brown-soft)] leading-relaxed mb-1 flex flex-wrap ${showPhonetic ? 'items-end gap-y-3' : 'items-baseline gap-y-1'}`}>
+                                    {item.words.map(({ original, cleanWord }: any, wIdx: number) => {
+                                        const phonetic = wordPhonetics[cleanWord];
+                                        const isMastered = userState?.vocabulary[cleanWord]?.is_mastered;
+                                        const isNew = !userState?.vocabulary[cleanWord];
+                                        const isHighlighted = highlightedWords.has(cleanWord);
+                                        const pronResult = pronunciationResultsByWord[cleanWord];
+                                        const isFailed = pronResult && pronResult.avgScore < 60;
+                                        const isGood = pronResult && pronResult.avgScore >= 80;
+                                        const isOrange = pronResult && pronResult.avgScore >= 60 && pronResult.avgScore < 80;
 
-                                    return aggregated.map((wr: any, idx) => {
-                                        const phonetic = wordPhonetics[wr.word];
-                                        let bgClass = "bg-green-50 border-green-200 text-green-700";
-                                        if (wr.isOmission) bgClass = "bg-[var(--color-cream)] border-[var(--color-brown-soft)] text-[var(--color-brown-soft)] opacity-60";
-                                        else if (wr.avgScore < 60) bgClass = "bg-red-50 border-red-200 text-red-700";
-                                        else if (wr.avgScore < 80) bgClass = "bg-orange-50 border-orange-200 text-orange-700";
+                                        let textColorClass = "text-[var(--color-brown-soft)]";
+                                        if (isFailed) textColorClass = "text-red-500 font-bold";
+                                        else if (isOrange) textColorClass = "text-orange-500 font-bold";
+                                        else if (isGood) textColorClass = "text-green-600 font-bold";
+                                        else if (isMastered) textColorClass = "text-[var(--color-green-medium)]";
 
                                         return (
-                                            <div key={idx} className={`inline-flex flex-col items-center px-3 py-2 rounded-lg border-2 ${bgClass}`}>
-                                                <span className="font-bold text-sm">{wr.word}</span>
-                                                {phonetic && <span className="font-mono text-[10px] opacity-70">{phonetic}</span>}
-                                                <span className="text-[10px] font-bold mt-1">{wr.avgScore.toFixed(0)}% avg</span>
-                                                {wr.errorLabel && <span className="text-[9px] font-display uppercase opacity-80 mt-1 max-w-[80px] truncate text-center" title={wr.errorLabel}>{wr.errorLabel}</span>}
-                                            </div>
+                                            <span
+                                                key={wIdx}
+                                                onClick={() => handleWordClick(cleanWord)}
+                                                className={`
+                                                    inline-flex flex-col items-center mr-1 cursor-pointer rounded px-0.5 transition-colors
+                                                    ${isHighlighted && !pronResult ? 'bg-[var(--color-tulip-yellow)]' : ''}
+                                                    ${!isHighlighted && !pronResult && isNew ? 'hover:bg-[var(--color-tulip-yellow)]' : ''}
+                                                    ${textColorClass}
+                                                `}
+                                                title={
+                                                    pronResult
+                                                        ? `${pronResult.avgScore.toFixed(0)}% accuracy${pronResult.errorType !== 'None' ? ` - ${pronResult.errorType}` : ''}`
+                                                        : isHighlighted ? "Highlighted" : isNew ? "New word" : "Mastered"
+                                                }
+                                            >
+                                                <span className="text-lg leading-relaxed">{original}</span>
+                                                {showPhonetic && (
+                                                    <span className={`font-mono text-[10px] leading-tight ${isFailed ? 'text-red-500 font-bold' : 'text-[var(--color-lavender-medium)]'}`}>
+                                                        {phonetic || '\u00A0'}
+                                                    </span>
+                                                )}
+                                            </span>
                                         );
-                                    });
-                                })()}
+                                    })}
+                                </p>
                             </div>
-                        </div>
-                        <div className="mt-6 pt-4 border-t border-[var(--color-pink-medium)] text-right">
-                            <button 
-                                onClick={() => setShowBreakdownModal(false)}
-                                className="button-retro bg-[var(--color-pink-soft)] border-2 border-[var(--color-pink-medium)] px-6 py-2 rounded-lg text-sm font-display text-[var(--color-brown-soft)] hover:bg-[var(--color-pink-medium)] shadow-[2px_2px_0px_var(--color-pink-medium)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all"
+                        ))}
+                    </div>
+
+                    {/* Footer / Actions */}
+                    <div className="mt-4 pt-4 border-t border-[var(--color-pink-medium)] flex flex-col gap-4 shrink-0">
+                        <PronunciationRecorder
+                            referenceText={session.content_text}
+                            wordPhonetics={wordPhonetics}
+                            onResult={handlePronunciationResult}
+                            onWordResults={handleWordPronunciationResults}
+                            onOpenBreakdown={() => { setShowBreakdownModal(!showBreakdownModal); setBreakdownFilter('all'); }}
+                        />
+
+                        <div className="flex justify-between">
+                            <button
+                                onClick={handlePrevSession}
+                                disabled={parseInt(chapterId) <= 1}
+                                className="button-retro bg-[var(--color-cream)] border-[3px] border-[var(--color-pink-medium)] flex items-center gap-2 px-4 py-2 rounded-lg text-xs font-display text-[var(--color-brown-soft)] disabled:opacity-50 disabled:cursor-not-allowed hover:bg-[var(--color-pink-light)]"
                             >
-                                Done
+                                <ChevronLeft size={16} /> Prev
+                            </button>
+                            <button
+                                onClick={handleNextSession}
+                                className="button-retro bg-[var(--color-pink-soft)] border-[3px] border-[var(--color-pink-medium)] flex items-center gap-2 px-6 py-3 rounded-lg text-xs font-display text-[var(--color-brown-soft)] hover:bg-[var(--color-pink-medium)] shadow-[2px_2px_0px_var(--color-pink-medium)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none"
+                            >
+                                Next Session <ChevronRight size={16} />
                             </button>
                         </div>
                     </div>
-                </div>
-            )}
+                </WindowRetro>
+
+                {/* Word Breakdown Side Panel */}
+                {showBreakdownModal && (
+                    <WindowRetro
+                        title="word breakdown"
+                        showFlowers={false}
+                        className="w-[40%] min-h-0 flex flex-col animate-[fadeIn_0.3s_ease-in]"
+                        contentClassName="flex-1 min-h-0 flex flex-col"
+                    >
+                        {/* Filter Buttons */}
+                        <div className="flex items-center gap-2 mb-4 pb-3 border-b border-[var(--color-pink-medium)] shrink-0 flex-wrap">
+                            <button
+                                onClick={() => setBreakdownFilter('all')}
+                                className={`font-display text-[9px] uppercase px-3 py-1.5 rounded-lg border-2 transition-all ${
+                                    breakdownFilter === 'all'
+                                        ? 'bg-[var(--color-pink-soft)] border-[var(--color-pink-medium)] text-[var(--color-brown-soft)]'
+                                        : 'bg-[var(--color-cream)] border-[var(--color-pink-soft)] text-[var(--color-brown-soft)] opacity-60 hover:opacity-100'
+                                }`}
+                            >
+                                all ({aggregatedBreakdown.length})
+                            </button>
+                            <button
+                                onClick={() => setBreakdownFilter('red')}
+                                className={`font-display text-[9px] uppercase px-3 py-1.5 rounded-lg border-2 transition-all ${
+                                    breakdownFilter === 'red'
+                                        ? 'bg-red-100 border-red-300 text-red-700'
+                                        : 'bg-red-50 border-red-200 text-red-400 opacity-60 hover:opacity-100'
+                                }`}
+                            >
+                                ● {redCount}
+                            </button>
+                            <button
+                                onClick={() => setBreakdownFilter('orange')}
+                                className={`font-display text-[9px] uppercase px-3 py-1.5 rounded-lg border-2 transition-all ${
+                                    breakdownFilter === 'orange'
+                                        ? 'bg-orange-100 border-orange-300 text-orange-700'
+                                        : 'bg-orange-50 border-orange-200 text-orange-400 opacity-60 hover:opacity-100'
+                                }`}
+                            >
+                                ● {orangeCount}
+                            </button>
+                            <button
+                                onClick={() => setBreakdownFilter('green')}
+                                className={`font-display text-[9px] uppercase px-3 py-1.5 rounded-lg border-2 transition-all ${
+                                    breakdownFilter === 'green'
+                                        ? 'bg-green-100 border-green-300 text-green-700'
+                                        : 'bg-green-50 border-green-200 text-green-400 opacity-60 hover:opacity-100'
+                                }`}
+                            >
+                                ● {greenCount}
+                            </button>
+
+                            <button
+                                onClick={() => setShowBreakdownModal(false)}
+                                className="ml-auto font-display text-[9px] text-[var(--color-brown-soft)] hover:text-[var(--color-pink-accent)] uppercase"
+                            >
+                                close ✕
+                            </button>
+                        </div>
+
+                        {/* Scrollable word list */}
+                        <div className="overflow-y-auto pr-2 custom-scrollbar flex-1">
+                            <div className="flex flex-wrap gap-2">
+                                {filteredBreakdown.map((wr: any, idx: number) => {
+                                    const phonetic = wordPhonetics[wr.word];
+                                    let bgClass = "bg-green-50 border-green-200 text-green-700";
+                                    if (wr.isOmission) bgClass = "bg-[var(--color-cream)] border-[var(--color-brown-soft)] text-[var(--color-brown-soft)] opacity-60";
+                                    else if (wr.avgScore < 60) bgClass = "bg-red-50 border-red-200 text-red-700";
+                                    else if (wr.avgScore < 80) bgClass = "bg-orange-50 border-orange-200 text-orange-700";
+
+                                    return (
+                                        <div key={idx} className={`inline-flex flex-col items-center px-3 py-2 rounded-lg border-2 ${bgClass}`}>
+                                            <span className="font-bold text-sm">{wr.word}</span>
+                                            {phonetic && <span className="font-mono text-[10px] opacity-70">{phonetic}</span>}
+                                            <span className="text-[10px] font-bold mt-1">{wr.avgScore.toFixed(0)}% avg</span>
+                                            {wr.errorLabel && <span className="text-[9px] font-display uppercase opacity-80 mt-1 max-w-[80px] truncate text-center" title={wr.errorLabel}>{wr.errorLabel}</span>}
+                                        </div>
+                                    );
+                                })}
+                                {filteredBreakdown.length === 0 && (
+                                    <p className="font-display text-[10px] text-[var(--color-brown-soft)] opacity-50 text-center w-full py-8 uppercase">
+                                        no words in this category
+                                    </p>
+                                )}
+                            </div>
+                        </div>
+                    </WindowRetro>
+                )}
+            </div>
         </div>
     );
 }

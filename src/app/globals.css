@@ -51,3 +51,47 @@ body {
   from { opacity: 0; transform: translateY(8px); }
   to { opacity: 1; transform: translateY(0); }
 }
+
+/* Retro scrollbar styling */
+.custom-scrollbar::-webkit-scrollbar {
+  width: 12px;
+}
+
+.custom-scrollbar::-webkit-scrollbar-track {
+  background: var(--color-bg-secondary);
+  border-left: 2px solid var(--color-pink-medium);
+  background-image: 
+    linear-gradient(45deg, var(--color-pink-soft) 25%, transparent 25%),
+    linear-gradient(-45deg, var(--color-pink-soft) 25%, transparent 25%),
+    linear-gradient(45deg, transparent 75%, var(--color-pink-soft) 75%),
+    linear-gradient(-45deg, transparent 75%, var(--color-pink-soft) 75%);
+  background-size: 4px 4px;
+  background-position: 0 0, 0 2px, 2px -2px, -2px 0;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb {
+  background: var(--color-pink-soft);
+  border: 2px solid;
+  border-color: var(--color-cream) var(--color-pink-medium) var(--color-pink-medium) var(--color-cream);
+  border-radius: 0;
+}
+
+.custom-scrollbar::-webkit-scrollbar-thumb:hover {
+  background: var(--color-pink-medium);
+  border-color: var(--color-cream) var(--color-pink-accent) var(--color-pink-accent) var(--color-cream);
+}
+
+.custom-scrollbar::-webkit-scrollbar-button:vertical:start:decrement,
+.custom-scrollbar::-webkit-scrollbar-button:vertical:end:increment {
+  display: block;
+  height: 12px;
+  background: var(--color-pink-soft);
+  border: 2px solid;
+  border-color: var(--color-cream) var(--color-pink-medium) var(--color-pink-medium) var(--color-cream);
+}
+
+/* Firefox scrollbar */
+.custom-scrollbar {
+  scrollbar-width: thin;
+  scrollbar-color: var(--color-pink-soft) var(--color-bg-secondary);
+}

@@ -23,7 +23,7 @@ export const ProgressBarFloral: React.FC<ProgressBarFloralProps> = ({ progress, 
                 
                 {/* Filled progress line */}
                 <div 
-                    className="absolute h-2 bg-[#FF8EAB] border-2 border-[#5C4532] border-r-0 rounded-l-full transition-all duration-500 ease-out"
+                    className="absolute h-2 bg-[var(--color-lavender-medium)] border-2 border-[#5C4532] border-r-0 rounded-l-full transition-all duration-500 ease-out"
                     style={{ width: `${Math.max(2, progress)}%` }}
                 ></div>
 
