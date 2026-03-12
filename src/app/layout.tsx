@@ -1,7 +1,7 @@
 import type { Metadata } from "next";
 import { DM_Sans, Press_Start_2P } from "next/font/google";
-import ChatWidget from "@/components/Chat/ChatWidget";
 import "./globals.css";
+import { MobileWarning } from "@/components/ui/MobileWarning";
 
 const dmSans = DM_Sans({
   variable: "--font-dm-sans",
@@ -31,8 +31,8 @@ export default function RootLayout({
         className={`${dmSans.variable} ${pressStart2P.variable} antialiased`}
         suppressHydrationWarning
       >
+        <MobileWarning />
         {children}
-        <ChatWidget />
       </body>
     </html>
   );

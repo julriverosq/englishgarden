@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { Mic, Square, Loader2 } from 'lucide-react';
 import * as SpeechSDK from 'microsoft-cognitiveservices-speech-sdk';
 import { ProgressBarFloral } from '../ui/ProgressBarFloral';
+import { storage } from '@/lib/storage';
 import { WordPronunciationResult } from '@/types';
 
 interface PronunciationRecorderProps {
@@ -11,6 +12,7 @@ interface PronunciationRecorderProps {
     wordPhonetics: Record<string, string>;
     onResult: (score: number) => void;
     onWordResults: (results: WordPronunciationResult[]) => void;
+    onOpenBreakdown?: () => void;
 }
 
 export const PronunciationRecorder: React.FC<PronunciationRecorderProps> = ({
@@ -18,10 +20,11 @@ export const PronunciationRecorder: React.FC<PronunciationRecorderProps> = ({
     wordPhonetics,
     onResult,
     onWordResults,
+    onOpenBreakdown,
 }) => {
     const [isRecording, setIsRecording] = useState(false);
     const [processing, setProcessing] = useState(false);
-    const [score, setScore] = useState<number | null>(null);
+    const [scores, setScores] = useState<number[]>([]);
     const [feedback, setFeedback] = useState<string | null>(null);
     const [wordResults, setWordResults] = useState<WordPronunciationResult[]>([]);
     const [recognizer, setRecognizer] = useState<SpeechSDK.SpeechRecognizer | null>(null);
@@ -33,6 +36,13 @@ export const PronunciationRecorder: React.FC<PronunciationRecorderProps> = ({
             }
         };
     }, [recognizer]);
+
+    // Propagate word results to parent outside of render cycle
+    useEffect(() => {
+        if (wordResults.length > 0) {
+            onWordResults(wordResults);
+        }
+    }, [wordResults]);
 
     const startRecording = async () => {
         try {
@@ -63,12 +73,15 @@ export const PronunciationRecorder: React.FC<PronunciationRecorderProps> = ({
                 if (e.result.reason === SpeechSDK.ResultReason.RecognizedSpeech) {
                     const pronunciationResult = SpeechSDK.PronunciationAssessmentResult.fromResult(e.result);
                     const finalScore = pronunciationResult.pronunciationScore;
-                    setScore(finalScore);
-                    onResult(finalScore);
-
-                    if (finalScore >= 90) setFeedback("Excellent pronunciation!");
-                    else if (finalScore >= 75) setFeedback("Good job! Keep practicing.");
-                    else setFeedback("Try again, focus on the highlighted words.");
+                    setScores(prev => {
+                        const newScores = [...prev, finalScore];
+                        const avgScore = newScores.reduce((a,b) => a+b, 0) / newScores.length;
+                        onResult(avgScore);
+                        if (avgScore >= 90) setFeedback("Excellent pronunciation!");
+                        else if (avgScore >= 75) setFeedback("Good job! Keep practicing.");
+                        else setFeedback("Try again, focus on the highlighted words.");
+                        return newScores;
+                    });
 
                     // Extract word-level results from the detailed JSON
                     try {
@@ -79,13 +92,44 @@ export const PronunciationRecorder: React.FC<PronunciationRecorderProps> = ({
                         const words = parsed?.NBest?.[0]?.Words;
 
                         if (Array.isArray(words)) {
-                            const results: WordPronunciationResult[] = words.map((w: any) => ({
-                                word: w.Word.toLowerCase(),
-                                accuracyScore: w.PronunciationAssessment?.AccuracyScore ?? 0,
-                                errorType: w.PronunciationAssessment?.ErrorType ?? 'None',
-                            }));
-                            setWordResults(results);
-                            onWordResults(results);
+                            const results: WordPronunciationResult[] = words.map((w: any) => {
+                                const phonemes = Array.isArray(w.Phonemes) ? w.Phonemes.map((p: any) => ({
+                                    phoneme: p.Phoneme,
+                                    accuracyScore: p.PronunciationAssessment?.AccuracyScore ?? 0,
+                                    errorType: p.PronunciationAssessment?.ErrorType ?? 'None',
+                                })) : [];
+
+                                return {
+                                    word: w.Word.toLowerCase(),
+                                    accuracyScore: w.PronunciationAssessment?.AccuracyScore ?? 0,
+                                    errorType: w.PronunciationAssessment?.ErrorType ?? 'None',
+                                    phonemes
+                                };
+                            });
+                            setWordResults(prev => [...prev, ...results]);
+
+                            // Auto-save difficult words to Seed Collection
+                            storage.update(state => {
+                                const newSeeds = { ...state.seedCollection };
+                                let changed = false;
+                                
+                                results.forEach(r => {
+                                    // Skip insertions, only care about words actually mispronounced or omitted
+                                    if (r.errorType === 'Insertion') return;
+
+                                    if (r.accuracyScore < 80) {
+                                        // Update or add to seed collection
+                                        const existing = newSeeds[r.word];
+                                        if (!existing || existing.accuracyScore > r.accuracyScore) {
+                                            newSeeds[r.word] = r;
+                                            changed = true;
+                                        }
+                                    }
+                                });
+
+                                if (!changed) return state;
+                                return { ...state, seedCollection: newSeeds };
+                            });
                         }
                     } catch (parseErr) {
                         console.error('Failed to parse word-level results:', parseErr);
@@ -117,7 +161,7 @@ export const PronunciationRecorder: React.FC<PronunciationRecorderProps> = ({
                 setIsRecording(true);
                 setProcessing(false);
                 setFeedback(null);
-                setScore(null);
+                setScores([]);
                 setWordResults([]);
             });
 
@@ -152,8 +196,8 @@ export const PronunciationRecorder: React.FC<PronunciationRecorderProps> = ({
     };
 
     return (
-        <div className="flex flex-col items-center gap-4 my-6 p-4 border-2 border-[var(--color-lavender-medium)] border-dashed rounded-xl bg-[var(--color-bg-secondary)]">
-            <div className="flex items-center gap-4">
+        <div className="flex flex-row items-center gap-6 my-4 p-4 border-2 border-[var(--color-lavender-medium)] border-dashed rounded-xl bg-[var(--color-bg-secondary)] min-h-[100px]">
+            <div className="flex items-center gap-4 shrink-0">
                 {!isRecording ? (
                     <button
                         onClick={startRecording}
@@ -180,50 +224,32 @@ export const PronunciationRecorder: React.FC<PronunciationRecorderProps> = ({
                 </div>
             </div>
 
+            <div className="w-px h-16 bg-[var(--color-pink-medium)] shrink-0 hidden sm:block"></div>
+
+            <div className="flex-1 flex flex-col justify-center min-w-0">
+
             {processing && <Loader2 className="animate-spin text-[var(--color-lavender-medium)]" />}
 
-            {score !== null && (
+            {(isRecording || scores.length > 0) && (
                 <div className="w-full">
-                    <ProgressBarFloral progress={score} label={`Score: ${score.toFixed(0)}%`} />
+                    <ProgressBarFloral 
+                        progress={scores.length > 0 ? (scores.reduce((a,b) => a+b, 0) / scores.length) : 0} 
+                        label={`Avg Score: ${scores.length > 0 ? (scores.reduce((a,b) => a+b, 0) / scores.length).toFixed(0) : '0'}%`} 
+                        feedback={feedback}
+                    />
                 </div>
             )}
 
-            {feedback && (
-                <div className={`text-sm font-bold ${score && score > 75 ? 'text-green-600' : 'text-[var(--color-pink-accent)]'}`}>
-                    {feedback}
-                </div>
+            {/* Word-by-word breakdown button */}
+            {scores.length > 0 && wordResults.length > 0 && onOpenBreakdown && (
+                <button 
+                    onClick={onOpenBreakdown}
+                    className="shrink-0 button-retro px-4 py-2 bg-[var(--color-cream)] border-2 border-[var(--color-pink-medium)] text-[10px] font-display uppercase text-[var(--color-brown-soft)] rounded-lg hover:bg-[var(--color-pink-light)] transition-colors self-center"
+                >
+                    View Word Breakdown
+                </button>
             )}
-
-            {/* Word-by-word breakdown */}
-            {wordResults.length > 0 && (
-                <div className="w-full mt-2">
-                    <p className="font-display text-[10px] uppercase text-[var(--color-brown-soft)] mb-2">
-                        Word-by-word breakdown
-                    </p>
-                    <div className="flex flex-wrap gap-1.5">
-                        {wordResults.map((wr, idx) => {
-                            const errorLabel = getErrorLabel(wr.errorType);
-                            const phonetic = wordPhonetics[wr.word];
-
-                            return (
-                                <div
-                                    key={idx}
-                                    className={`inline-flex flex-col items-center px-2 py-1 rounded border text-xs ${getScoreColor(wr.accuracyScore)}`}
-                                >
-                                    <span className="font-bold">{wr.word}</span>
-                                    {phonetic && (
-                                        <span className="font-mono text-[9px] opacity-70">{phonetic}</span>
-                                    )}
-                                    <span className="text-[9px]">{wr.accuracyScore.toFixed(0)}%</span>
-                                    {errorLabel && (
-                                        <span className="text-[8px] font-display uppercase opacity-80">{errorLabel}</span>
-                                    )}
-                                </div>
-                            );
-                        })}
-                    </div>
-                </div>
-            )}
+            </div>
         </div>
     );
 };

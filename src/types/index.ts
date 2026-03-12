@@ -1,9 +1,16 @@
 export type WordPhonetics = Record<string, string>;
 
+export interface PhonemeResult {
+    phoneme: string;
+    accuracyScore: number;
+    errorType: 'None' | 'Mispronunciation' | 'Omission' | 'Insertion';
+}
+
 export interface WordPronunciationResult {
     word: string;
     accuracyScore: number;
     errorType: 'None' | 'Mispronunciation' | 'Omission' | 'Insertion';
+    phonemes?: PhonemeResult[];
 }
 
 export interface UserPreferences {
@@ -89,6 +96,7 @@ export interface UserStats {
     avg_pronunciation_score: number;
     last_study_date?: string;
     total_sessions_completed: number;
+    total_books_read?: number;
 }
 
 export interface UserState {
@@ -97,6 +105,7 @@ export interface UserState {
     stats: UserStats;
     sessionsCompleted: Record<string, SessionProgress>; // key: session_id
     vocabulary: Record<string, VocabularyWord>; // key: word (lowercase)
+    seedCollection: Record<string, WordPronunciationResult>; // key: word (lowercase)
     exercisesCompleted: Record<string, ExerciseResult>; // key: exercise_id
     conversations: Conversation[];
     studySessions: StudySession[];
@@ -118,9 +127,11 @@ export const INITIAL_STATE: UserState = {
         total_reading_minutes: 0,
         avg_pronunciation_score: 0,
         total_sessions_completed: 0,
+        total_books_read: 0,
     },
     sessionsCompleted: {},
     vocabulary: {},
+    seedCollection: {},
     exercisesCompleted: {},
     conversations: [],
     studySessions: [],

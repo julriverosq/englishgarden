@@ -2,10 +2,13 @@
 
 import React, { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { BookOpen, Trophy, Flame, Mic, Plus } from 'lucide-react';
+import { BookOpen, BookMarked, Flame, Mic, Plus } from 'lucide-react';
 import { WindowRetro } from '@/components/ui/WindowRetro';
 import { storage } from '@/lib/storage';
 import { UserState } from '@/types';
+import { PlantSproutIcon } from '@/components/ui/PlantSproutIcon';
+import { SakuraIcon } from '@/components/ui/SakuraIcon';
+import { BookBasketIcon } from '@/components/ui/BookBasketIcon';
 
 export default function Dashboard() {
   const [userState, setUserState] = useState<UserState | null>(null);
@@ -24,8 +27,9 @@ export default function Dashboard() {
       {/* Header */}
       <header className="flex justify-between items-center mb-12">
         <div>
-          <h1 className="font-display text-2xl text-[var(--color-brown-soft)] mb-2">
-            Hello, <span className="text-[var(--color-pink-accent)]">{userState.preferences.name || 'Student'}</span>! 🌸
+          <h1 className="flex items-center gap-3 font-display text-2xl text-[var(--color-brown-soft)] mb-2">
+            Hello, <span className="text-[var(--color-pink-accent)]">{userState.preferences.name || 'Student'}</span>!
+            <SakuraIcon size={40} className="drop-shadow-[2px_2px_0px_var(--color-pink-soft)] animate-[pulse_4s_ease-in-out_infinite]" />
           </h1>
           <p className="font-body text-[var(--color-green-medium)]">Ready to grow your English garden?</p>
         </div>
@@ -39,9 +43,9 @@ export default function Dashboard() {
       {/* Stats Row */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <StatCard
-          icon={<Trophy size={24} />}
-          label="Total Points"
-          value={userState.stats.total_points}
+          icon={<BookMarked size={24} />}
+          label="Books Read"
+          value={userState.stats.total_books_read || 0}
           color="var(--color-tulip-yellow)"
         />
         <StatCard
@@ -59,7 +63,7 @@ export default function Dashboard() {
         <StatCard
           icon={<Mic size={24} />}
           label="Avg Score"
-          value={`${userState.stats.avg_pronunciation_score.toFixed(0)}%`}
+          value={`${(userState.stats.avg_pronunciation_score ?? 0).toFixed(0)}%`}
           color="var(--color-lavender-medium)"
         />
       </div>
@@ -106,27 +110,28 @@ export default function Dashboard() {
         {/* Sidebar - Quick Actions */}
         <div className="md:col-span-1 space-y-6">
           {/* Daily Message */}
-          <div className="bg-[var(--color-cream)] border-[3px] border-[var(--color-pink-medium)] rounded-xl p-6 shadow-[4px_4px_0px_var(--color-pink-soft)]">
-            <span className="text-2xl mb-2 block">🌱</span>
-            <p className="font-body text-sm text-[var(--color-brown-soft)] italic">
-              "Learning is a garden that grows with patience."
-            </p>
-          </div>
+          <WindowRetro title="" showFlowers={false} className="mb-6">
+            <div className="flex items-center gap-4 p-4">
+              <BookBasketIcon size={52} className="shrink-0 drop-shadow-[2px_2px_0px_var(--color-pink-soft)]" />
+              <p className="font-display text-[10px] text-[var(--color-brown-soft)] lowercase leading-loose opacity-60">
+                "learning is a garden that grows with patience."
+              </p>
+            </div>
+          </WindowRetro>
 
-          {/* Recently Learned Words */}
-          <WindowRetro title="Fresh Vocab" showFlowers={false} className="min-h-[200px]">
-            <div className="space-y-2">
-              {Object.keys(userState.vocabulary).slice(0, 5).map(word => (
-                <div key={word} className="flex justify-between items-center bg-[var(--color-bg-primary)] p-2 rounded border border-[var(--color-pink-soft)]">
-                  <span className="font-body text-sm">{word}</span>
-                  <span className="text-xs">
-                    {'★'.repeat(Math.round(userState.vocabulary[word].mastery_level / 20))}
-                  </span>
-                </div>
-              ))}
-              {Object.keys(userState.vocabulary).length === 0 && (
-                <p className="text-xs text-center opacity-60">Start reading to collect words!</p>
-              )}
+          {/* Seed Collection Link */}
+          <WindowRetro title="Seed Collection" showFlowers={false} className="min-h-[200px]">
+            <div className="flex flex-col items-center justify-center p-4 text-center h-full">
+              <PlantSproutIcon size={40} className="mb-4 drop-shadow-[2px_2px_0px_var(--color-pink-soft)]" />
+              <h3 className="font-display text-[12px] uppercase text-[var(--color-brown-soft)] mb-2">Needs Practice</h3>
+              <p className="font-body text-[10px] text-[var(--color-green-medium)] mb-8 opacity-80">
+                {Object.keys(userState.seedCollection || {}).length} words waiting to bloom
+              </p>
+              <Link href="/practice" className="w-full mt-auto">
+                <button className="w-full button-retro bg-[var(--color-green-soft)] border-[3px] border-[var(--color-green-medium)] py-3 rounded-xl text-[10px] font-display uppercase text-[var(--color-brown-soft)] hover:bg-[var(--color-green-medium)] shadow-[2px_2px_0px_var(--color-green-medium)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all">
+                  View Seeds
+                </button>
+              </Link>
             </div>
           </WindowRetro>
         </div>

@@ -3,6 +3,7 @@
 import React, { useState, useEffect } from 'react';
 import { supabase } from '@/lib/supabase';
 import { WindowRetro } from '../ui/WindowRetro';
+import { RetroLoading } from '../ui/RetroLoading';
 import { PronunciationRecorder } from './PronunciationRecorder';
 import { storage } from '@/lib/storage';
 import { Eye, EyeOff, ChevronRight, ChevronLeft, ArrowLeft } from 'lucide-react';
@@ -25,7 +26,9 @@ export default function ChapterView({ bookId, chapterId }: ChapterViewProps) {
     const [userState, setUserState] = useState<UserState | null>(null);
     const [highlightedWords, setHighlightedWords] = useState<Set<string>>(new Set());
     const [wordPhonetics, setWordPhonetics] = useState<WordPhonetics>({});
-    const [pronunciationResults, setPronunciationResults] = useState<Record<string, WordPronunciationResult>>({});
+    const [pronunciationResultsByWord, setPronunciationResultsByWord] = useState<Record<string, { avgScore: number; errorType: string }>>({});
+    const [allPronunciationResults, setAllPronunciationResults] = useState<WordPronunciationResult[]>([]);
+    const [showBreakdownModal, setShowBreakdownModal] = useState(false);
 
     useEffect(() => {
         const loadData = async () => {
@@ -55,6 +58,18 @@ export default function ChapterView({ bookId, chapterId }: ChapterViewProps) {
             if (sessionData) {
                 const allWords = sessionData.content_text.split(/\s+/);
                 setWordPhonetics(getWordPhonetics(allWords));
+
+                // Restore highlighted words from vocabulary
+                const contentWords = new Set(
+                    allWords.map((w: string) => w.replace(/[^a-zA-Z]/g, '').toLowerCase()).filter(Boolean)
+                );
+                const savedHighlights = new Set<string>();
+                for (const word of Object.keys(state.vocabulary)) {
+                    if (contentWords.has(word)) {
+                        savedHighlights.add(word);
+                    }
+                }
+                setHighlightedWords(savedHighlights);
             }
 
             // Update Current Book in Storage
@@ -89,13 +104,26 @@ export default function ChapterView({ bookId, chapterId }: ChapterViewProps) {
         }
     };
 
-    if (loading) return <div className="p-8 text-center">Loading session...</div>;
-    if (!session) return <div className="p-8 text-center">Session not found.</div>;
+    if (loading) return <div className="h-full flex items-center justify-center"><RetroLoading /></div>;
+    if (!session) return <div className="p-8 text-center font-display text-sm text-[var(--color-brown-soft)]">Session not found.</div>;
 
     // Process content into lines for rendering
+    let globalWordCounter = 0;
     const lines = (session.content_text.match(/[^.!?]+[.!?]+/g) || [session.content_text])
         .filter((l: string) => l.trim().length > 0)
-        .map((l: string) => ({ line: l.trim() }));
+        .map((l: string) => {
+            const rawLine = l.trim();
+            const words = rawLine.split(/\s+/).filter(Boolean);
+            const mappedWords = words.map(word => {
+                const currentIdx = globalWordCounter++;
+                return {
+                    original: word,
+                    cleanWord: word.replace(/[^a-zA-Z]/g, '').toLowerCase(),
+                    globalIdx: currentIdx
+                };
+            });
+            return { line: rawLine, words: mappedWords };
+        });
 
     const handleWordClick = (cleanWord: string) => {
         if (!cleanWord) return;
@@ -135,12 +163,18 @@ export default function ChapterView({ bookId, chapterId }: ChapterViewProps) {
         storage.update(s => {
             const sessionIdStr = session.id;
             const prev = s.sessionsCompleted[sessionIdStr];
+            
+            // Check if this is the final session of the book being completed for the first time
+            const isLastSession = book && session.session_number === book.total_sessions;
+            const newlyFinishedBook = isLastSession && !prev;
+
             return {
                 ...s,
                 stats: {
                     ...s.stats,
                     avg_pronunciation_score: (s.stats.avg_pronunciation_score * Object.keys(s.sessionsCompleted).length + score) / (Object.keys(s.sessionsCompleted).length + 1),
-                    total_sessions_completed: s.stats.total_sessions_completed + (prev ? 0 : 1)
+                    total_sessions_completed: s.stats.total_sessions_completed + (prev ? 0 : 1),
+                    total_books_read: (s.stats.total_books_read || 0) + (newlyFinishedBook ? 1 : 0)
                 },
                 sessionsCompleted: {
                     ...s.sessionsCompleted,
@@ -156,21 +190,44 @@ export default function ChapterView({ bookId, chapterId }: ChapterViewProps) {
     };
 
     const handleWordPronunciationResults = (results: WordPronunciationResult[]) => {
-        const map: Record<string, WordPronunciationResult> = {};
-        for (const r of results) {
-            map[r.word] = r;
+        // Filter out insertions (extra words not in reference text)
+        const alignedResults = results.filter(r => r.errorType !== 'Insertion');
+
+        // Aggregate by word string — same logic used in the breakdown modal
+        const wordMap: Record<string, { scores: number[]; errorTypes: Set<string> }> = {};
+        for (const r of alignedResults) {
+            const key = r.word.toLowerCase();
+            if (!wordMap[key]) wordMap[key] = { scores: [], errorTypes: new Set() };
+            wordMap[key].scores.push(r.accuracyScore);
+            if (r.errorType !== 'None') wordMap[key].errorTypes.add(r.errorType);
         }
-        setPronunciationResults(map);
+
+        const map: Record<string, { avgScore: number; errorType: string }> = {};
+        for (const [word, data] of Object.entries(wordMap)) {
+            const avg = data.scores.reduce((a, b) => a + b, 0) / data.scores.length;
+            const errorTypes = Array.from(data.errorTypes);
+            map[word] = {
+                avgScore: avg,
+                errorType: errorTypes.length > 0 ? errorTypes[0] : 'None',
+            };
+        }
+        setPronunciationResultsByWord(map);
+        setAllPronunciationResults(alignedResults);
     };
 
     return (
-        <div className="max-w-4xl mx-auto p-4 space-y-6">
-            <Link href="/" className="inline-flex items-center gap-2 text-[var(--color-brown-soft)] hover:text-[var(--color-pink-accent)] font-display text-xs uppercase">
+        <div className="max-w-4xl mx-auto p-4 h-[100dvh] flex flex-col space-y-4">
+            <Link href="/" className="inline-flex items-center gap-2 text-[var(--color-brown-soft)] hover:text-[var(--color-pink-accent)] font-display text-xs uppercase shrink-0">
                 <ArrowLeft size={16} /> Back to Garden
             </Link>
-            <WindowRetro title={`${book?.title} - Session ${session.session_number}`} flowerType="daisy">
+            <WindowRetro 
+                title={`${book?.title} - Session ${session.session_number}`} 
+                flowerType="daisy"
+                className="flex-1 min-h-0 flex flex-col"
+                contentClassName="flex-1 min-h-0 flex flex-col"
+            >
                 {/* Toolbar */}
-                <div className="flex justify-between items-center mb-6 border-b border-[var(--color-pink-medium)] pb-4">
+                <div className="flex justify-between items-center mb-6 border-b border-[var(--color-pink-medium)] pb-4 shrink-0">
                     <div className="flex gap-2 items-center">
                         <button
                             onClick={() => setShowPhonetic(!showPhonetic)}
@@ -185,19 +242,25 @@ export default function ChapterView({ bookId, chapterId }: ChapterViewProps) {
                 </div>
 
                 {/* Content */}
-                <div className="space-y-6 max-h-[60vh] overflow-y-auto pr-2 custom-scrollbar">
+                <div className="space-y-6 flex-1 overflow-y-auto pr-2 custom-scrollbar">
                     {lines.map((item: any, idx: number) => (
                         <div key={idx} className="reading-line-group bg-[var(--color-cream)] border-l-4 border-[var(--color-lavender-light)] rounded pl-4 py-2 hover:bg-[var(--color-bg-secondary)] transition-colors group">
                             <p className={`reading-text font-body text-[var(--color-brown-soft)] leading-relaxed mb-1 flex flex-wrap ${showPhonetic ? 'items-end gap-y-3' : 'items-baseline gap-y-1'}`}>
-                                {item.line.split(' ').map((word: string, wIdx: number) => {
-                                    const cleanWord = word.replace(/[^a-zA-Z]/g, '').toLowerCase();
+                                {item.words.map(({ original, cleanWord }: any, wIdx: number) => {
                                     const phonetic = wordPhonetics[cleanWord];
                                     const isMastered = userState?.vocabulary[cleanWord]?.is_mastered;
                                     const isNew = !userState?.vocabulary[cleanWord];
                                     const isHighlighted = highlightedWords.has(cleanWord);
-                                    const pronResult = pronunciationResults[cleanWord];
-                                    const isFailed = pronResult && pronResult.accuracyScore < 60;
-                                    const isGood = pronResult && pronResult.accuracyScore >= 80;
+                                    const pronResult = pronunciationResultsByWord[cleanWord];
+                                    const isFailed = pronResult && pronResult.avgScore < 60;
+                                    const isGood = pronResult && pronResult.avgScore >= 80;
+                                    const isOrange = pronResult && pronResult.avgScore >= 60 && pronResult.avgScore < 80;
+
+                                    let textColorClass = "text-[var(--color-brown-soft)]";
+                                    if (isFailed) textColorClass = "text-red-500 font-bold";
+                                    else if (isOrange) textColorClass = "text-orange-500 font-bold";
+                                    else if (isGood) textColorClass = "text-green-600 font-bold";
+                                    else if (isMastered) textColorClass = "text-[var(--color-green-medium)]";
 
                                     return (
                                         <span
@@ -205,19 +268,17 @@ export default function ChapterView({ bookId, chapterId }: ChapterViewProps) {
                                             onClick={() => handleWordClick(cleanWord)}
                                             className={`
                                                 inline-flex flex-col items-center mr-1 cursor-pointer rounded px-0.5 transition-colors
-                                                ${isFailed ? 'bg-red-100 underline decoration-red-400 decoration-wavy decoration-2 underline-offset-4' : ''}
-                                                ${isGood && !isHighlighted ? 'bg-green-50' : ''}
-                                                ${isHighlighted && !isFailed ? 'bg-[var(--color-tulip-yellow)]' : ''}
+                                                ${isHighlighted && !pronResult ? 'bg-[var(--color-tulip-yellow)]' : ''}
                                                 ${!isHighlighted && !pronResult && isNew ? 'hover:bg-[var(--color-tulip-yellow)]' : ''}
-                                                ${isMastered && !pronResult ? 'text-[var(--color-green-medium)]' : ''}
+                                                ${textColorClass}
                                             `}
                                             title={
                                                 pronResult
-                                                    ? `${pronResult.accuracyScore.toFixed(0)}% accuracy${pronResult.errorType !== 'None' ? ` - ${pronResult.errorType}` : ''}`
+                                                    ? `${pronResult.avgScore.toFixed(0)}% accuracy${pronResult.errorType !== 'None' ? ` - ${pronResult.errorType}` : ''}`
                                                     : isHighlighted ? "Highlighted" : isNew ? "New word" : "Mastered"
                                             }
                                         >
-                                            <span className="text-lg leading-relaxed">{word}</span>
+                                            <span className="text-lg leading-relaxed">{original}</span>
                                             {showPhonetic && (
                                                 <span className={`font-mono text-[10px] leading-tight ${isFailed ? 'text-red-500 font-bold' : 'text-[var(--color-lavender-medium)]'}`}>
                                                     {phonetic || '\u00A0'}
@@ -232,12 +293,13 @@ export default function ChapterView({ bookId, chapterId }: ChapterViewProps) {
                 </div>
 
                 {/* Footer / Actions */}
-                <div className="mt-8 pt-6 border-t border-[var(--color-pink-medium)] flex flex-col gap-6">
+                <div className="mt-4 pt-4 border-t border-[var(--color-pink-medium)] flex flex-col gap-4 shrink-0">
                     <PronunciationRecorder
-                        referenceText={session.content_text.substring(0, 500)}
+                        referenceText={session.content_text}
                         wordPhonetics={wordPhonetics}
                         onResult={handlePronunciationResult}
                         onWordResults={handleWordPronunciationResults}
+                        onOpenBreakdown={() => setShowBreakdownModal(true)}
                     />
 
                     <div className="flex justify-between">
@@ -257,6 +319,70 @@ export default function ChapterView({ bookId, chapterId }: ChapterViewProps) {
                     </div>
                 </div>
             </WindowRetro>
+
+            {/* Breakdown Modal */}
+            {showBreakdownModal && (
+                <div className="fixed inset-0 bg-black/50 z-50 flex items-center justify-center p-4">
+                    <div className="bg-[var(--color-cream)] border-[3px] border-[var(--color-pink-medium)] rounded-xl p-6 max-w-2xl w-full max-h-[80vh] flex flex-col shadow-[8px_8px_0px_var(--color-pink-medium)]">
+                        <div className="flex justify-between items-center mb-6 border-b border-[var(--color-pink-medium)] pb-4">
+                            <h2 className="font-display text-xl uppercase text-[var(--color-pink-accent)]">Word Breakdown</h2>
+                            <button onClick={() => setShowBreakdownModal(false)} className="text-[var(--color-brown-soft)] hover:text-[var(--color-pink-accent)] font-bold">
+                                Close X
+                            </button>
+                        </div>
+                        <div className="overflow-y-auto pr-2 custom-scrollbar flex-1">
+                            <div className="flex flex-wrap gap-2">
+                                {(() => {
+                                    const uniqueMap = allPronunciationResults.reduce((acc: any, wr) => {
+                                        if (!acc[wr.word]) acc[wr.word] = { word: wr.word, scores: [], errorTypes: new Set() };
+                                        acc[wr.word].scores.push(wr.accuracyScore);
+                                        if (wr.errorType !== 'None') acc[wr.word].errorTypes.add(wr.errorType);
+                                        return acc;
+                                    }, {});
+
+                                    const aggregated = Object.values(uniqueMap).map((a: any) => {
+                                        const errorTypesArr = Array.from(a.errorTypes);
+                                        // Highlight omissions heavily if present as only error
+                                        const isOmission = errorTypesArr.length === 1 && errorTypesArr[0] === 'Omission';
+                                        return {
+                                            word: a.word,
+                                            avgScore: a.scores.reduce((sum: number, val: number) => sum + val, 0) / a.scores.length,
+                                            lowestScore: Math.min(...a.scores),
+                                            isOmission,
+                                            errorLabel: errorTypesArr.length > 0 ? errorTypesArr.join(', ') : null
+                                        };
+                                    }).sort((a: any, b: any) => a.avgScore - b.avgScore);
+
+                                    return aggregated.map((wr: any, idx) => {
+                                        const phonetic = wordPhonetics[wr.word];
+                                        let bgClass = "bg-green-50 border-green-200 text-green-700";
+                                        if (wr.isOmission) bgClass = "bg-[var(--color-cream)] border-[var(--color-brown-soft)] text-[var(--color-brown-soft)] opacity-60";
+                                        else if (wr.avgScore < 60) bgClass = "bg-red-50 border-red-200 text-red-700";
+                                        else if (wr.avgScore < 80) bgClass = "bg-orange-50 border-orange-200 text-orange-700";
+
+                                        return (
+                                            <div key={idx} className={`inline-flex flex-col items-center px-3 py-2 rounded-lg border-2 ${bgClass}`}>
+                                                <span className="font-bold text-sm">{wr.word}</span>
+                                                {phonetic && <span className="font-mono text-[10px] opacity-70">{phonetic}</span>}
+                                                <span className="text-[10px] font-bold mt-1">{wr.avgScore.toFixed(0)}% avg</span>
+                                                {wr.errorLabel && <span className="text-[9px] font-display uppercase opacity-80 mt-1 max-w-[80px] truncate text-center" title={wr.errorLabel}>{wr.errorLabel}</span>}
+                                            </div>
+                                        );
+                                    });
+                                })()}
+                            </div>
+                        </div>
+                        <div className="mt-6 pt-4 border-t border-[var(--color-pink-medium)] text-right">
+                            <button 
+                                onClick={() => setShowBreakdownModal(false)}
+                                className="button-retro bg-[var(--color-pink-soft)] border-2 border-[var(--color-pink-medium)] px-6 py-2 rounded-lg text-sm font-display text-[var(--color-brown-soft)] hover:bg-[var(--color-pink-medium)] shadow-[2px_2px_0px_var(--color-pink-medium)] hover:translate-x-[1px] hover:translate-y-[1px] hover:shadow-none transition-all"
+                            >
+                                Done
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            )}
         </div>
     );
 }

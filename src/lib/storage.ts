@@ -51,35 +51,42 @@ export const storage = {
 
     updateStreak: () => {
         storage.update(state => {
-            const today = new Date().toISOString().split('T')[0];
+            const now = new Date();
+            const today = `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}-${String(now.getDate()).padStart(2, '0')}`;
             const lastStudy = state.stats.last_study_date;
 
-            let newStreak = state.stats.streak_days;
+            let newStreak = state.stats.streak_days || 0;
 
             if (lastStudy) {
-                const lastDate = new Date(lastStudy);
-                const currentDate = new Date(today);
-                const diffTime = Math.abs(currentDate.getTime() - lastDate.getTime());
-                const diffDays = Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+                // Parse strictly as local midnight to avoid UTC crossover issues
+                const [lastYear, lastMonth, lastDay] = lastStudy.split('-').map(Number);
+                const [currYear, currMonth, currDay] = today.split('-').map(Number);
+                
+                const lastDate = new Date(lastYear, lastMonth - 1, lastDay);
+                const currentDate = new Date(currYear, currMonth - 1, currDay);
+                
+                const diffTime = currentDate.getTime() - lastDate.getTime();
+                const diffDays = Math.round(diffTime / (1000 * 60 * 60 * 24));
 
                 if (diffDays === 1) {
-                    // Consecutive day
                     newStreak++;
                 } else if (diffDays > 1) {
-                    // Streak broken
                     newStreak = 1;
                 }
-                // if diffDays == 0 (same day), do nothing
+                // if diffDays === 0, newStreak remains the same
             } else {
                 newStreak = 1;
             }
+
+            // Ensure streak is at least 1 since they just studied
+            if (newStreak === 0) newStreak = 1;
 
             return {
                 ...state,
                 stats: {
                     ...state.stats,
                     streak_days: newStreak,
-                    longest_streak: Math.max(state.stats.longest_streak, newStreak),
+                    longest_streak: Math.max(state.stats.longest_streak || 0, newStreak),
                     last_study_date: today
                 }
             };

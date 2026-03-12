@@ -3,25 +3,42 @@ import React from 'react';
 interface ProgressBarFloralProps {
     progress: number;
     label?: string;
+    feedback?: string | null;
 }
 
-export const ProgressBarFloral: React.FC<ProgressBarFloralProps> = ({ progress, label = "loading..." }) => {
-    const flowers = ['🌸', '🌼', '🌷', '🌺'];
-
+export const ProgressBarFloral: React.FC<ProgressBarFloralProps> = ({ progress, label = "loading...", feedback }) => {
     return (
-        <div className="progress-container my-4">
-            <div className="progress-label font-display text-[10px] text-[var(--color-pink-accent)] mb-2">{label}</div>
-            <div className="progress-bar-retro bg-[var(--color-bg-secondary)] border-[3px] border-[var(--color-pink-medium)] rounded-[20px] h-8 overflow-hidden relative">
-                <div
-                    className="progress-fill bg-gradient-to-r from-[var(--color-pink-soft)] to-[var(--color-pink-accent)] h-full transition-all duration-300 ease-out flex items-center justify-around px-2"
-                    style={{ width: `${Math.max(5, progress)}%` }}
+        <div className="progress-container flex flex-col w-full">
+            <div className="flex justify-between items-end mb-2 w-full">
+                <div className="progress-label font-display text-[10px] text-[var(--color-brown-soft)]">{label}</div>
+                {feedback && (
+                    <div className="font-display text-[9px] text-[var(--color-pink-accent)] text-right">
+                        {feedback}
+                    </div>
+                )}
+            </div>
+            <div className="relative w-full h-4 mt-2 mb-2 flex items-center">
+                {/* Background track line */}
+                <div className="absolute w-full h-2 bg-[#F6E1CC] border-2 border-[#5C4532] rounded-full"></div>
+                
+                {/* Filled progress line */}
+                <div 
+                    className="absolute h-2 bg-[#FF8EAB] border-2 border-[#5C4532] border-r-0 rounded-l-full transition-all duration-500 ease-out"
+                    style={{ width: `${Math.max(2, progress)}%` }}
+                ></div>
+
+                {/* Flower indicator (matches the position of the progress) */}
+                <div 
+                    className="absolute top-1/2 -translate-y-1/2 -translate-x-1/2 transition-all duration-500 ease-out flex items-center justify-center z-10"
+                    style={{ left: `${Math.max(2, progress)}%` }}
                 >
-                    {flowers.map((flower, i) => {
-                        const threshold = (i + 1) * 20; // 20, 40, 60, 80
-                        return progress >= threshold ? (
-                            <span key={i} className="flower-icon text-base animate-[flower-pop_0.3s_ease]">{flower}</span>
-                        ) : null;
-                    })}
+                    <div className="w-8 h-8 flex items-center justify-center filter drop-shadow-[0_2px_0_rgba(92,69,50,1)]">
+                        <img 
+                            src="/flowers/tulip-group.svg" 
+                            alt="flower indicator" 
+                            className="w-full h-full object-contain drop-shadow-md"
+                        />
+                    </div>
                 </div>
             </div>
         </div>
