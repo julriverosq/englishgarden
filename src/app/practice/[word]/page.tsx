@@ -71,6 +71,9 @@ export default function PracticeWordPage() {
             const bloomKey = `seeds_bloomed_${new Date().toISOString().split('T')[0]}`;
             const current = parseInt(localStorage.getItem(bloomKey) || '0');
             localStorage.setItem(bloomKey, String(current + 1));
+
+            // Increment garden progress
+            storage.incrementSeedsBloomed();
         }
     };
 

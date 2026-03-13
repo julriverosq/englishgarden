@@ -2,7 +2,7 @@
 
 import React, { useState, useEffect } from 'react';
 import Link from 'next/link';
-import { ArrowLeft, Save, Download, Upload } from 'lucide-react';
+import { ArrowLeft, Save, Download, Upload, Mail } from 'lucide-react';
 import { WindowRetro } from '@/components/ui/WindowRetro';
 import { MessageBoxRetro } from '@/components/ui/MessageBoxRetro';
 import { storage } from '@/lib/storage';
@@ -16,9 +16,32 @@ export default function SettingsPage() {
         setState(storage.get());
     }, []);
 
-    const handleSave = () => {
+    const handleSave = async () => {
         if (!state) return;
+        const prevEmail = storage.get().preferences.reminder_email;
+        const newEmail = state.preferences.reminder_email.trim();
+
         storage.set(state);
+
+        // Sync reminder email with server
+        if (newEmail && newEmail !== prevEmail) {
+            await fetch('/api/reminder', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    email: newEmail,
+                    userName: state.preferences.name,
+                    bookTitle: state.currentBook?.title || '',
+                }),
+            }).catch(() => {});
+        } else if (!newEmail && prevEmail) {
+            await fetch('/api/reminder', {
+                method: 'DELETE',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({ email: prevEmail }),
+            }).catch(() => {});
+        }
+
         setMessage({ text: 'Preferences saved successfully!', type: 'success' });
         setTimeout(() => setMessage(null), 3000);
     };
@@ -115,6 +138,24 @@ export default function SettingsPage() {
                             />
                             <label htmlFor="phonetic" className="text-sm font-body text-[var(--color-brown-soft)]">Show phonetic transcription by default</label>
                         </div>
+                    </section>
+
+                    {/* Email Reminders Section */}
+                    <section>
+                        <h3 className="font-display text-sm text-[var(--color-pink-accent)] mb-4 border-b border-[var(--color-pink-medium)] pb-2">
+                            <Mail size={14} className="inline mr-2 -mt-0.5" />
+                            Email Reminders
+                        </h3>
+                        <p className="text-xs font-body text-[var(--color-brown-soft)] opacity-70 mb-3">
+                            Get a friendly reminder if you haven&apos;t practiced for 3 days. Leave empty to disable.
+                        </p>
+                        <input
+                            type="email"
+                            placeholder="your@email.com"
+                            value={state.preferences.reminder_email}
+                            onChange={e => setState({ ...state, preferences: { ...state.preferences, reminder_email: e.target.value } })}
+                            className="w-full bg-[var(--color-bg-primary)] border-2 border-[var(--color-pink-medium)] rounded px-3 py-2 text-sm"
+                        />
                     </section>
 
                     {/* Action Buttons */}

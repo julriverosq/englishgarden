@@ -1,5 +1,19 @@
 export type WordPhonetics = Record<string, string>;
 
+export interface GardenProgress {
+    totalSeedsEverCollected: number;
+    totalSeedsBloomed: number;
+}
+
+export interface GardenMilestone {
+    id: string;
+    category: 'reading' | 'practice' | 'mastery';
+    label: string;
+    flowerName: string;
+    isUnlocked: boolean;
+    progress: number; // 0-1
+}
+
 export interface PhonemeResult {
     phoneme: string;
     accuracyScore: number;
@@ -19,6 +33,7 @@ export interface UserPreferences {
     user_level: 'A1' | 'A2' | 'B1' | 'B2' | 'C1' | 'C2';
     learning_goal: string;
     show_phonetic_transcription: boolean;
+    reminder_email: string;
 }
 
 export interface ReadingSession {
@@ -109,6 +124,7 @@ export interface UserState {
     exercisesCompleted: Record<string, ExerciseResult>; // key: exercise_id
     conversations: Conversation[];
     studySessions: StudySession[];
+    gardenProgress: GardenProgress;
 }
 
 export const INITIAL_STATE: UserState = {
@@ -118,6 +134,7 @@ export const INITIAL_STATE: UserState = {
         user_level: 'B1',
         learning_goal: 'Fluency',
         show_phonetic_transcription: true,
+        reminder_email: '',
     },
     currentBook: null,
     stats: {
@@ -135,4 +152,8 @@ export const INITIAL_STATE: UserState = {
     exercisesCompleted: {},
     conversations: [],
     studySessions: [],
+    gardenProgress: {
+        totalSeedsEverCollected: 0,
+        totalSeedsBloomed: 0,
+    },
 };

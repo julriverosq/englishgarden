@@ -10,6 +10,7 @@ import { PlantSproutIcon } from '@/components/ui/PlantSproutIcon';
 import { SakuraIcon } from '@/components/ui/SakuraIcon';
 import { BookBasketIcon } from '@/components/ui/BookBasketIcon';
 import { SeedReminder } from '@/components/ui/SeedReminder';
+import { FolderGardenIcon } from '@/components/ui/FolderGardenIcon';
 
 export default function Dashboard() {
   const [userState, setUserState] = useState<UserState | null>(null);
@@ -138,6 +139,11 @@ export default function Dashboard() {
             </div>
           </WindowRetro>
         </div>
+      </div>
+
+      {/* Garden Folder */}
+      <div className="fixed bottom-14 right-14 z-40 drop-shadow-[3px_3px_0px_var(--color-pink-medium)]">
+        <FolderGardenIcon />
       </div>
     </div>
   );

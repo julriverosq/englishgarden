@@ -109,17 +109,20 @@ export const PronunciationRecorder: React.FC<PronunciationRecorderProps> = ({
                             setWordResults(prev => [...prev, ...results]);
 
                             // Auto-save difficult words to Seed Collection
+                            let newSeedsCount = 0;
                             storage.update(state => {
                                 const newSeeds = { ...state.seedCollection };
                                 let changed = false;
-                                
+
                                 results.forEach(r => {
                                     // Skip insertions, only care about words actually mispronounced or omitted
                                     if (r.errorType === 'Insertion') return;
 
                                     if (r.accuracyScore < 80) {
-                                        // Update or add to seed collection
                                         const existing = newSeeds[r.word];
+                                        if (!existing) {
+                                            newSeedsCount++;
+                                        }
                                         if (!existing || existing.accuracyScore > r.accuracyScore) {
                                             newSeeds[r.word] = r;
                                             changed = true;
@@ -130,6 +133,9 @@ export const PronunciationRecorder: React.FC<PronunciationRecorderProps> = ({
                                 if (!changed) return state;
                                 return { ...state, seedCollection: newSeeds };
                             });
+                            if (newSeedsCount > 0) {
+                                storage.incrementSeedsCollected(newSeedsCount);
+                            }
                         }
                     } catch (parseErr) {
                         console.error('Failed to parse word-level results:', parseErr);
