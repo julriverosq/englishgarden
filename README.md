@@ -1,3 +1,7 @@
+REMINDER 🌷
+PDF Guidelines
+Please upload PDFs that start directly from Chapter 1. The file should not include a cover page, dedication pages, or illustrations. This helps the system process the content more accurately.
+
 This is a [Next.js](https://nextjs.org) project bootstrapped with [`create-next-app`](https://nextjs.org/docs/app/api-reference/cli/create-next-app).
 
 ## Getting Started
