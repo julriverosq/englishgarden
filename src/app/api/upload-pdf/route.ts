@@ -2,7 +2,9 @@ import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 import { extractTextFromPDF } from '@/lib/pdf-processor';
 
-// Initialize Supabase client
+// Vercel serverless config: allow up to 60s for PDF processing
+export const maxDuration = 60;
+
 // Initialize Supabase client
 const supabaseUrl = process.env.NEXT_PUBLIC_SUPABASE_URL?.startsWith('http')
     ? process.env.NEXT_PUBLIC_SUPABASE_URL

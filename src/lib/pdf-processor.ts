@@ -2,6 +2,11 @@
 // In pdfjs-dist v4+, legacy build uses .mjs extension
 import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
 
+// Disable worker for serverless environments (Vercel)
+if (typeof pdfjsLib.GlobalWorkerOptions !== 'undefined') {
+    pdfjsLib.GlobalWorkerOptions.workerSrc = '';
+}
+
 // Helper to extract text from PDF buffer
 export async function extractTextFromPDF(buffer: ArrayBuffer): Promise<{ text: string; numPages: number }[]> {
     // Load the document
@@ -9,6 +14,8 @@ export async function extractTextFromPDF(buffer: ArrayBuffer): Promise<{ text: s
         data: new Uint8Array(buffer),
         useSystemFonts: true, // Try to avoid font download errors
         disableFontFace: true, // Disable font face loading
+        isEvalSupported: false, // Avoid eval in serverless
+        useWorkerFetch: false,
     });
 
     const doc = await loadingTask.promise;

@@ -83,6 +83,11 @@ export default function PDFUploader() {
 
             clearInterval(progressInterval);
 
+            const contentType = response.headers.get('content-type') || '';
+            if (!contentType.includes('application/json')) {
+                throw new Error('Server error: the API returned an unexpected response. Please try again.');
+            }
+
             const data = await response.json();
 
             if (!response.ok) {
@@ -126,6 +131,12 @@ export default function PDFUploader() {
             });
 
             clearInterval(progressInterval);
+
+            const contentType = response.headers.get('content-type') || '';
+            if (!contentType.includes('application/json')) {
+                throw new Error('Server error: the API returned an unexpected response. Please try again.');
+            }
+
             const data = await response.json();
 
             if (!response.ok) {
