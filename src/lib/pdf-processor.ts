@@ -4,7 +4,7 @@
 export async function extractTextFromPDF(buffer: ArrayBuffer): Promise<{ text: string; numPages: number }> {
     const pdfjsLib = await import('pdfjs-dist');
 
-    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
+    pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
 
     const doc = await pdfjsLib.getDocument({ data: new Uint8Array(buffer) }).promise;
     const numPages = doc.numPages;
