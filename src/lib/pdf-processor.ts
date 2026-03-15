@@ -2,9 +2,9 @@
 
 // Extract text from PDF in the browser (lazy-loads pdfjs-dist to avoid SSR issues)
 export async function extractTextFromPDF(buffer: ArrayBuffer): Promise<{ text: string; numPages: number }> {
-    const pdfjsLib = await import('pdfjs-dist');
+    const pdfjsLib = await import('pdfjs-dist/legacy/build/pdf.mjs');
 
-    pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.min.mjs';
+    pdfjsLib.GlobalWorkerOptions.workerSrc = '/pdf.worker.legacy.min.mjs';
 
     const doc = await pdfjsLib.getDocument({ data: new Uint8Array(buffer) }).promise;
     const numPages = doc.numPages;
