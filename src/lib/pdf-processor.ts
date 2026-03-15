@@ -1,59 +1,32 @@
-import { PDFParse } from 'pdf-parse';
+'use client';
 
-// Disable worker for serverless environments (Vercel)
-PDFParse.setWorker('');
+// Extract text from PDF in the browser (lazy-loads pdfjs-dist to avoid SSR issues)
+export async function extractTextFromPDF(buffer: ArrayBuffer): Promise<{ text: string; numPages: number }> {
+    const pdfjsLib = await import('pdfjs-dist');
 
-// Helper to extract text from PDF buffer
-export async function extractTextFromPDF(buffer: ArrayBuffer): Promise<{ text: string; numPages: number }[]> {
-    const parser = new PDFParse({
-        data: new Uint8Array(buffer),
-        disableFontFace: true,
-        isEvalSupported: false,
-        useWorkerFetch: false,
-    });
+    pdfjsLib.GlobalWorkerOptions.workerSrc = `https://cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.min.mjs`;
 
-    try {
-        const textResult = await parser.getText();
-        const infoResult = await parser.getInfo();
-        const numPages = infoResult.total;
+    const doc = await pdfjsLib.getDocument({ data: new Uint8Array(buffer) }).promise;
+    const numPages = doc.numPages;
 
-        const fullText = textResult.text;
+    let fullText = '';
 
-        // Basic splitting strategy
-        const sections: { text: string; numPages: number }[] = [];
-        const chapterRegex = /\n(?:Chapter|CHAPTER)\s+([0-9IVX]+|One|Two|Three)/g;
-
-        let match;
-        const matches = [];
-        while ((match = chapterRegex.exec(fullText)) !== null) {
-            matches.push(match);
+    for (let i = 1; i <= numPages; i++) {
+        try {
+            const page = await doc.getPage(i);
+            const textContent = await page.getTextContent();
+            const pageText = textContent.items
+                .map((item: any) => {
+                    let text = item.str;
+                    if (item.hasEOL) text += '\n';
+                    return text;
+                })
+                .join('');
+            fullText += pageText + '\n\n';
+        } catch (error) {
+            console.error(`Error processing page ${i}:`, error);
         }
-
-        if (matches.length > 0) {
-            for (let i = 0; i < matches.length; i++) {
-                const currentMatch = matches[i];
-                const nextMatch = matches[i + 1];
-
-                const start = currentMatch.index;
-                const end = nextMatch ? nextMatch.index : fullText.length;
-
-                const content = fullText.slice(start, end).trim();
-                if (content.length > 50) {
-                    sections.push({ text: content, numPages: 1 });
-                }
-            }
-            if (matches[0].index > 100) {
-                const intro = fullText.slice(0, matches[0].index).trim();
-                if (intro.length > 50) {
-                    sections.unshift({ text: intro, numPages: 1 });
-                }
-            }
-        } else {
-            sections.push({ text: fullText, numPages });
-        }
-
-        return sections;
-    } finally {
-        await parser.destroy();
     }
+
+    return { text: fullText, numPages };
 }

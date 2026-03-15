@@ -8,15 +8,16 @@ import { ProgressBarFloral } from '../ui/ProgressBarFloral';
 import { MessageBoxRetro } from '../ui/MessageBoxRetro';
 import { BookUploadConfig } from '../book/BookUploadConfig';
 import { storage } from '@/lib/storage';
+import { extractTextFromPDF } from '@/lib/pdf-processor';
 
 interface UploadData {
-    tempPdfUrl: string;
+    extractedText: string;
     totalWords: number;
+    numPages: number;
     bookInfo: {
         title: string;
         author: string;
     };
-    suggestedConfig: any;
 }
 
 export default function PDFUploader() {
@@ -60,41 +61,34 @@ export default function PDFUploader() {
         }
     };
 
-    // Step 1: Upload and Analyze
+    // Step 1: Extract text in the browser (no API call needed)
     const handleFileUpload = async () => {
         if (!file) return;
 
         setLoading(true);
         setProgress(10);
 
-        const formData = new FormData();
-        formData.append('file', file);
-        formData.append('title', file.name.replace('.pdf', ''));
-
         try {
             const progressInterval = setInterval(() => {
                 setProgress(prev => Math.min(prev + 5, 90));
             }, 300);
 
-            const response = await fetch('/api/upload-pdf', {
-                method: 'POST',
-                body: formData,
-            });
+            const buffer = await file.arrayBuffer();
+            const { text, numPages } = await extractTextFromPDF(buffer);
 
             clearInterval(progressInterval);
 
-            const contentType = response.headers.get('content-type') || '';
-            if (!contentType.includes('application/json')) {
-                throw new Error('Server error: the API returned an unexpected response. Please try again.');
-            }
+            const totalWords = text.split(/\s+/).filter(w => w.length > 0).length;
 
-            const data = await response.json();
-
-            if (!response.ok) {
-                throw new Error(data.error || 'Upload failed');
-            }
-
-            setUploadData(data);
+            setUploadData({
+                extractedText: text,
+                totalWords,
+                numPages,
+                bookInfo: {
+                    title: file.name.replace('.pdf', ''),
+                    author: 'Unknown'
+                },
+            });
             setLoading(false);
             setStep('config');
             setProgress(0);
@@ -107,9 +101,9 @@ export default function PDFUploader() {
         }
     };
 
-    // Step 2: Confirm Config and Process
+    // Step 2: Send extracted text + config to backend
     const handleConfigConfirm = async (config: { wordsPerSession: number; maxSessionsPerDay: number }) => {
-        if (!uploadData) return;
+        if (!uploadData || !file) return;
 
         setStep('processing');
         setLoading(true);
@@ -124,7 +118,8 @@ export default function PDFUploader() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    tempPdfUrl: uploadData.tempPdfUrl,
+                    extractedText: uploadData.extractedText,
+                    numPages: uploadData.numPages,
                     config,
                     bookInfo: uploadData.bookInfo
                 }),
@@ -167,7 +162,7 @@ export default function PDFUploader() {
 
         } catch (error) {
             setLoading(false);
-            setStep('config'); // Go back to config on error? or stay processing
+            setStep('config');
             const errorMessage = error instanceof Error ? error.message : 'Processing failed';
             setMessage({ text: errorMessage, type: 'error' });
             console.error(error);
