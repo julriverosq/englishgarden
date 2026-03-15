@@ -7,7 +7,7 @@ import { WindowRetro } from '../ui/WindowRetro';
 import { ProgressBarFloral } from '../ui/ProgressBarFloral';
 import { MessageBoxRetro } from '../ui/MessageBoxRetro';
 import { BookUploadConfig } from '../book/BookUploadConfig';
-import { storage } from '@/lib/storage';
+import { storage, getUserId } from '@/lib/storage';
 import { extractTextFromPDF } from '@/lib/pdf-processor';
 
 interface UploadData {
@@ -118,6 +118,7 @@ export default function PDFUploader() {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
+                    userId: getUserId(),
                     extractedText: uploadData.extractedText,
                     numPages: uploadData.numPages,
                     config,

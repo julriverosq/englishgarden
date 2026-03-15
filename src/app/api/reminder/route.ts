@@ -9,7 +9,7 @@ const supabase = createClient(
 // Register or update email reminder + refresh last_active_at
 export async function POST(req: NextRequest) {
     try {
-        const { email, userName, bookTitle } = await req.json();
+        const { userId, email, userName, bookTitle } = await req.json();
 
         if (!email || typeof email !== 'string') {
             return NextResponse.json({ error: 'Email is required' }, { status: 400 });
@@ -24,6 +24,7 @@ export async function POST(req: NextRequest) {
                     book_title: bookTitle || '',
                     last_active_at: new Date().toISOString(),
                     is_active: true,
+                    user_id: userId || null,
                 },
                 { onConflict: 'email' }
             );

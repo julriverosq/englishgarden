@@ -1,6 +1,18 @@
 import { UserState, INITIAL_STATE, GardenMilestone } from '@/types';
 
 const STORAGE_KEY = 'english_platform_progress';
+const USER_ID_KEY = 'english_platform_user_id';
+
+// Generate or retrieve a unique browser-based user ID
+export function getUserId(): string {
+    if (typeof window === 'undefined') return '';
+    let userId = localStorage.getItem(USER_ID_KEY);
+    if (!userId) {
+        userId = crypto.randomUUID();
+        localStorage.setItem(USER_ID_KEY, userId);
+    }
+    return userId;
+}
 
 export const storage = {
     get: (): UserState => {
@@ -150,6 +162,7 @@ export const storage = {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({
+                userId: getUserId(),
                 email,
                 userName: state.preferences.name,
                 bookTitle: state.currentBook?.title || '',

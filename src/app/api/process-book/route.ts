@@ -11,7 +11,7 @@ const supabase = createClient(supabaseUrl, supabaseKey);
 
 export async function POST(req: NextRequest) {
     try {
-        const { extractedText, numPages, config, bookInfo } = await req.json();
+        const { userId, extractedText, numPages, config, bookInfo } = await req.json();
 
         if (!extractedText || !config || !bookInfo) {
             return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
@@ -32,7 +32,8 @@ export async function POST(req: NextRequest) {
                 author: bookInfo.author,
                 pdf_url: null,
                 total_pages: metadata.totalPages,
-                total_sessions: metadata.totalSessions
+                total_sessions: metadata.totalSessions,
+                user_id: userId || null
             })
             .select()
             .single();
