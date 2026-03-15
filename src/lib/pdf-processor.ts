@@ -1,16 +1,13 @@
 // Use legacy build for Node.js support (avoids DOMMatrix/canvas errors)
-// In pdfjs-dist v4+, legacy build uses .mjs extension
-import * as pdfjsLib from 'pdfjs-dist/legacy/build/pdf.mjs';
+import { getDocument, GlobalWorkerOptions } from 'pdfjs-dist/legacy/build/pdf.mjs';
 
 // Disable worker for serverless environments (Vercel)
-if (typeof pdfjsLib.GlobalWorkerOptions !== 'undefined') {
-    pdfjsLib.GlobalWorkerOptions.workerSrc = '';
-}
+GlobalWorkerOptions.workerSrc = '';
 
 // Helper to extract text from PDF buffer
 export async function extractTextFromPDF(buffer: ArrayBuffer): Promise<{ text: string; numPages: number }[]> {
     // Load the document
-    const loadingTask = pdfjsLib.getDocument({
+    const loadingTask = getDocument({
         data: new Uint8Array(buffer),
         useSystemFonts: true, // Try to avoid font download errors
         disableFontFace: true, // Disable font face loading
